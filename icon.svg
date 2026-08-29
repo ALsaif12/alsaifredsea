@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c4a6e"/>
+      <stop offset="1" stop-color="#062b3e"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e2c378"/>
+      <stop offset="1" stop-color="#c9a64c"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#sea)"/>
+  <!-- star -->
+  <g fill="url(#gold)">
+    <path d="M256 96l14 40 40 14-40 14-14 40-14-40-40-14 40-14z"/>
+  </g>
+  <!-- three coastal waves -->
+  <g fill="none" stroke="url(#gold)" stroke-width="18" stroke-linecap="round">
+    <path d="M120 300c28-34 60-34 88 0s60 34 88 0 60-34 88 0"/>
+    <path d="M120 356c28-34 60-34 88 0s60 34 88 0 60-34 88 0" opacity="0.7"/>
+    <path d="M120 412c28-34 60-34 88 0s60 34 88 0 60-34 88 0" opacity="0.45"/>
+  </g>
+</svg>

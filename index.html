@@ -1,0 +1,1812 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f2e8" />
+  <title>Al Saif · Family Concierge</title>
+
+  <!-- Home-screen install (PWA) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Al Saif">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            sand:   { 50:'#fbf8f1', 100:'#f7f2e8', 200:'#efe6d2', 300:'#e3d4b0', 400:'#d4bb83' },
+            ink:    { DEFAULT:'#1c2733', soft:'#3b4858', mute:'#6b7785' },
+            sea:    { 50:'#eaf3f8', 100:'#cfe3ee', 500:'#0c4a6e', 600:'#08384f', 700:'#062b3e' },
+            gold:   { 50:'#fbf3dc', 300:'#e2c378', 500:'#c9a64c', 600:'#a8893d' },
+          },
+          fontFamily: {
+            display: ['"Cormorant Garamond"','Georgia','serif'],
+            sans:    ['Inter','system-ui','sans-serif'],
+          },
+          boxShadow: {
+            card: '0 1px 2px rgba(28,39,51,.04), 0 8px 24px -8px rgba(28,39,51,.10)',
+            soft: '0 1px 2px rgba(28,39,51,.04), 0 2px 8px -2px rgba(28,39,51,.06)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Pinned to 7.x on purpose. Babel 8 changed preset-react's default to the
+       "automatic" JSX runtime, which emits `import ... from "react/jsx-runtime"`.
+       A plain <script> can't resolve a bare module import, so the whole app below
+       dies with "Cannot use import statement outside a module" and the page renders
+       blank. Do not remove this version pin. -->
+  <script src="https://unpkg.com/@babel/standalone@7.29.8/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <style>
+    html, body { background:#f7f2e8; color:#1c2733; font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+    .font-display { font-family:'Cormorant Garamond', Georgia, serif; letter-spacing:-.01em; }
+    .glass { background: rgba(255,255,255,.72); backdrop-filter: saturate(140%) blur(10px); -webkit-backdrop-filter: saturate(140%) blur(10px); }
+    .ring-gold { box-shadow: 0 0 0 2px #c9a64c inset; }
+    .grain { background-image:
+      radial-gradient(at 20% 10%, rgba(201,166,76,.08) 0, transparent 40%),
+      radial-gradient(at 80% 0%,  rgba(12,74,110,.07) 0, transparent 50%),
+      radial-gradient(at 50% 100%,rgba(190,24,93,.05)  0, transparent 50%); }
+    .fade-in { animation: fade .35s ease both; }
+    @keyframes fade { from { opacity:0; transform:translateY(4px);} to { opacity:1; transform:none;} }
+    .sheet-up { animation: sheetup .3s cubic-bezier(.22,1,.36,1) both; }
+    @keyframes sheetup { from { transform: translateY(28px); opacity:.5; } to { transform:none; opacity:1; } }
+    .pulse-dot { animation: pulse 2.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(1); opacity:.85; } 50% { transform: scale(1.18); opacity:1; } }
+    .scroll-x { overflow-x:auto; scrollbar-width:none; } .scroll-x::-webkit-scrollbar { display:none; }
+    .divider-gold { background: linear-gradient(90deg, transparent, #c9a64c66 30%, #c9a64c66 70%, transparent); height:1px; }
+    .btn { transition: transform .12s ease, box-shadow .2s ease, background .2s ease; }
+    .btn:active { transform: translateY(1px); }
+    .chip { font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
+    /* 16px controls (no iOS zoom-on-focus); placeholders gentle, never larger than the label. */
+    input, select, textarea { font: inherit; font-size:16px; }
+    input::placeholder, textarea::placeholder { color:#9aa6b2; font-weight:400; }
+    select { -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7785' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 14px center; padding-right:38px; }
+    /* gentle pop when an option becomes selected */
+    @keyframes optpop { 0%{ transform:scale(.96);} 60%{ transform:scale(1.04);} 100%{ transform:scale(1);} }
+    .opt-pop { animation: optpop .22s ease; }
+
+    /* ── Coast map pins ── */
+    .leaflet-container { background:#0b1f33; font-family:'Inter',sans-serif; border-radius:1.5rem; }
+    .map-pin-wrap { background:transparent !important; border:none !important; }
+    .map-pin { position:relative; }
+    .map-pin-dot { width:16px; height:16px; border-radius:999px; background:var(--c,#0c4a6e);
+      border:2.5px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+    .map-pin.ghost .map-pin-dot { opacity:.45; border-style:dashed; }
+    .map-pin.active .map-pin-dot { box-shadow:0 0 0 3px #fff, 0 0 0 6px var(--c,#0c4a6e), 0 2px 8px rgba(0,0,0,.5); transform:scale(1.15); }
+    .map-pin.occ .map-pin-dot { animation: pinpulse 1.8s ease-in-out infinite; }
+    .map-pin.occ::before { content:''; position:absolute; left:50%; top:50%; width:16px; height:16px;
+      border-radius:999px; background:var(--c,#0c4a6e); transform:translate(-50%,-50%);
+      animation: pinhalo 1.8s ease-out infinite; }
+    @keyframes pinpulse { 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.25);} }
+    @keyframes pinhalo { 0%{ opacity:.6; transform:translate(-50%,-50%) scale(1);} 100%{ opacity:0; transform:translate(-50%,-50%) scale(3.4);} }
+    .map-pin-label { position:absolute; left:22px; top:-3px; white-space:nowrap; background:rgba(255,255,255,.94);
+      color:#1c2733; font-size:11px; font-weight:600; padding:3px 8px; border-radius:999px; box-shadow:0 2px 8px rgba(0,0,0,.2);
+      opacity:0; transition:opacity .15s ease; pointer-events:none; }
+    .map-pin-label span { color:#a8893d; margin-left:5px; }
+    .map-pin-wrap:hover .map-pin-label { opacity:1; }
+    .leaflet-popup-content-wrapper { border-radius:14px; }
+    .leaflet-popup-content { margin:12px 14px; }
+
+    /* Al Saif Wrapped — story cards + print/PDF isolation */
+    .wrap-card { animation: fade .5s ease both; }
+    @media print {
+      body * { visibility: hidden !important; }
+      #wrapped-cards, #wrapped-cards * { visibility: visible !important; }
+      #wrapped-cards { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print { display: none !important; }
+      @page { margin: 12mm; }
+    }
+  </style>
+</head>
+<body class="min-h-screen grain">
+<div id="root"></div>
+
+<script>
+  // ⚙️  Supabase credentials — edit here if you ever rotate keys
+  window.AL_SAIF_CONFIG = {
+    SUPABASE_URL: 'https://ztadkdzfvgakqbuminin.supabase.co',
+    SUPABASE_KEY: 'sb_publishable_Ic36ts1aapiuMzO0JP4-Kg_oJumEgqF'
+  }
+</script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback, useRef } = React
+const { createClient } = supabase
+
+const sb = createClient(window.AL_SAIF_CONFIG.SUPABASE_URL, window.AL_SAIF_CONFIG.SUPABASE_KEY)
+window.sb = sb  // exposed for debugging / live inspection
+
+/* ─────────────────────────────  utilities  ───────────────────────────── */
+
+// Parse a 'YYYY-MM-DD' string as LOCAL midnight (not UTC) — avoids the
+// timezone shift that pushes bookings onto the wrong calendar day in UTC+ zones.
+const parseLocal = s => { const [y,m,d] = String(s).split('-').map(Number); return new Date(y, m-1, d) }
+// Normalize any input to a Date: date-only strings → local midnight; everything else (timestamps, Date objs) → as-is.
+const toDate = d => (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? parseLocal(d) : new Date(d)
+
+const fmt = {
+  sar:   n => new Intl.NumberFormat('en-US',{style:'currency',currency:'SAR',maximumFractionDigits:0}).format(n||0),
+  date:  d => toDate(d).toLocaleDateString('en-GB',{weekday:'short', day:'2-digit', month:'short'}),
+  long:  d => toDate(d).toLocaleDateString('en-GB',{weekday:'long', day:'2-digit', month:'long', year:'numeric'}),
+  month: d => toDate(d).toLocaleDateString('en-GB',{month:'long', year:'numeric'}),
+  short: d => toDate(d).toLocaleDateString('en-GB',{day:'2-digit', month:'short'}),
+  iso:   d => { const x=new Date(d); x.setMinutes(x.getMinutes()-x.getTimezoneOffset()); return x.toISOString().slice(0,10) },
+  rel:   d => {
+    const diff = (toDate(d) - new Date()) / 86400000
+    const r = Math.round(diff)
+    if (r === 0) return 'today'
+    if (r === 1) return 'tomorrow'
+    if (r === -1) return 'yesterday'
+    if (r > 0) return `in ${r} days`
+    return `${Math.abs(r)} days ago`
+  }
+}
+
+const nights = (s,e) => Math.max(1, Math.round((parseLocal(e)-parseLocal(s))/86400000))
+const sameDay = (a,b) => fmt.iso(a) === fmt.iso(b)
+const rangeOverlaps = (a1,a2,b1,b2) => a1 <= b2 && b1 <= a2   // ISO date strings compare lexically
+
+// Who a stay or a car request is for — shared across booking & transport so the
+// whole family speaks the same language (not me-centric free text).
+const AUDIENCES = [
+  { id:'family',  label:'Family',  icon:'🏡', hint:'Our own family' },
+  { id:'friends', label:'Friends', icon:'🥂', hint:'Friends & their guests' },
+  { id:'pr',      label:'PR',      icon:'🤝', hint:'Business & growing connections' },
+]
+const audienceOf = id => AUDIENCES.find(a => a.id === id)
+  || (id === 'business' ? AUDIENCES[2] : null)   // legacy 'business' → PR
+  || { id, label: id, icon:'✦' }
+const PURPOSES = AUDIENCES   // alias — booking purpose uses the same set
+
+const CAR_TYPES = [
+  { id:'sedan', label:'Sedan', icon:'🚗' },
+  { id:'van',   label:'Van',   icon:'🚐' },
+]
+const PICKUPS = ['Red Sea Int’l', 'Al Wajh']
+const TRANSPORT_STATUS = {
+  requested: { label:'Needs arranging', tone:'gold'  },
+  arranged:  { label:'Arranged',        tone:'green' },
+  done:      { label:'Done',            tone:'neutral' },
+  cancelled: { label:'Cancelled',       tone:'rose'  },
+}
+const carTypeLabel = id => (CAR_TYPES.find(c=>c.id===id)||{}).label || id
+const fmtDateTime = v => v ? new Date(v).toLocaleString('en-GB',{weekday:'short',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—'
+
+// Time-of-day theming for the coast — the hero shifts with the real hour.
+const coastTheme = () => {
+  const h = new Date().getHours()
+  if (h < 5)  return { key:'night', label:'Midnight on the water', sky:'linear-gradient(160deg,#0b1f33,#062b3e 55%,#0c4a6e)', ink:'#f3ece0', sub:'#cdd6df' }
+  if (h < 8)  return { key:'dawn',  label:'Dawn over the reef',     sky:'linear-gradient(160deg,#243b53,#7b6a8d 60%,#e0a07a)', ink:'#fff7ec', sub:'#f3e3d2' }
+  if (h < 16) return { key:'day',   label:'Midday blue',            sky:'linear-gradient(160deg,#0c4a6e,#1f7fb0 60%,#7cc3e0)', ink:'#ffffff', sub:'#e8f4fb' }
+  if (h < 19) return { key:'sunset',label:'Golden hour',            sky:'linear-gradient(160deg,#0c4a6e,#c9772f 70%,#e2b15a)', ink:'#fff7ec', sub:'#ffe9cf' }
+  return            { key:'dusk',  label:'Dusk settles in',        sky:'linear-gradient(160deg,#0b1f33,#33405a 55%,#8a6f7e)', ink:'#f3ece0', sub:'#d9dee6' }
+}
+
+// Celebratory burst when a booking is confirmed.
+const celebrate = () => {
+  if (typeof confetti !== 'function') return
+  const gold = ['#c9a64c','#e2c378','#0c4a6e','#7cc3e0','#ffffff']
+  confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: gold, scalar: 0.9, disableForReducedMotion: true })
+  setTimeout(() => confetti({ particleCount: 40, angle: 60,  spread: 55, origin: { x: 0 }, colors: gold }), 150)
+  setTimeout(() => confetti({ particleCount: 40, angle: 120, spread: 55, origin: { x: 1 }, colors: gold }), 150)
+}
+
+// Fallback villa coordinates — rough positions on Shura Island (25.504°N, 36.958°E)
+// and Amaala. These are just starting points; the in-app "Place pins" tool lets
+// Fahad tap the real spots, which override these.
+const COORDS = {
+  'rosewood-5br':   { lat: 25.5045, lng: 36.9560 },
+  'rosewood-3br':   { lat: 25.5035, lng: 36.9575 },
+  'rosewood-2br':   { lat: 25.5050, lng: 36.9590 },
+  'fourseasons-2br':{ lat: 25.5025, lng: 36.9568 },
+  'sls-1br':        { lat: 25.5015, lng: 36.9582 },
+  'nammos-3br':     { lat: 26.7300, lng: 36.4700 },  // Amaala — further north
+}
+const SHURA_CENTER = { lat: 25.50417, lng: 36.9575 }
+
+// Pin persistence: tries the DB (properties.lat/lng) first; falls back to this
+// device's localStorage so pins work instantly even before the SQL migration runs.
+const loadLocalPins = () => { try { return JSON.parse(localStorage.getItem('al-saif-pins') || '{}') } catch { return {} } }
+const saveLocalPin  = (slug, lat, lng) => { const p = loadLocalPins(); p[slug] = { lat, lng }; localStorage.setItem('al-saif-pins', JSON.stringify(p)) }
+// Resolve a villa's display coordinate + whether it's been deliberately placed.
+const coordsFor = (p, localPins) => {
+  if (p.lat != null && p.lng != null) return { lat: p.lat, lng: p.lng, placed: true }
+  const l = localPins[p.slug]; if (l) return { lat: l.lat, lng: l.lng, placed: true }
+  const c = COORDS[p.slug];   return c ? { lat: c.lat, lng: c.lng, placed: false } : null
+}
+
+/* ─────────────────────────────  primitives  ───────────────────────────── */
+
+const Btn = ({as='button', kind='primary', className='', children, ...rest}) => {
+  const C = as
+  const base = 'btn inline-flex items-center justify-center gap-2 rounded-full font-medium tracking-wide whitespace-nowrap'
+  const sizes = 'px-5 py-2.5 text-sm'
+  const kinds = {
+    primary:  'bg-sea-500 text-white hover:bg-sea-600 shadow-soft',
+    gold:     'bg-gold-500 text-white hover:bg-gold-600 shadow-soft',
+    ghost:    'bg-transparent text-ink hover:bg-sand-200/60',
+    outline:  'border border-sand-200 bg-white text-ink hover:border-ink-soft',
+    soft:     'bg-sand-100 text-ink hover:bg-sand-200',
+    danger:   'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100',
+  }
+  return <C className={`${base} ${sizes} ${kinds[kind]||''} ${className}`} {...rest}>{children}</C>
+}
+
+const Card = ({className='', children}) => (
+  <div className={`bg-white rounded-2xl shadow-card ${className}`}>{children}</div>
+)
+
+const Chip = ({tone='neutral', children, className=''}) => {
+  const tones = {
+    neutral:'bg-sand-100 text-ink-soft',
+    sea:    'bg-sea-50 text-sea-700',
+    gold:   'bg-gold-50 text-gold-600',
+    green:  'bg-emerald-50 text-emerald-700',
+    rose:   'bg-rose-50 text-rose-700',
+  }
+  return <span className={`chip rounded-full px-2.5 py-1 ${tones[tone]||tones.neutral} ${className}`}>{children}</span>
+}
+
+const Spinner = () => (
+  <div className="flex items-center justify-center p-10">
+    <div className="w-6 h-6 rounded-full border-2 border-sand-300 border-t-sea-500 animate-spin"/>
+  </div>
+)
+
+// Shared input styling (real Tailwind utilities — processed reliably by the CDN).
+const IPT = "w-full rounded-2xl border border-sand-200 bg-white px-4 py-3 text-[16px] text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-sea-500/30 focus:border-sea-500/60 transition"
+// Selectable tile classes. `on` = selected. Includes press + hover feedback.
+const optClass = (on) => `relative flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-[14px] font-medium transition-all duration-150 active:scale-[.94] ${on ? 'border-sea-500 bg-sea-50 text-sea-700 ring-2 ring-sea-500/30 shadow-soft' : 'border-sand-200 bg-white text-ink-soft hover:border-sea-500/40 hover:bg-sand-50'}`
+
+// Labelled field — the LABEL is the prominent "question" (16px semibold); the input matches at 16px.
+const Field = ({ label, hint, children, className='' }) => (
+  <div className={className}>
+    <div className="text-[16px] font-semibold text-ink mb-2">{label}{hint && <span className="text-ink-mute font-normal text-[13px]"> · {hint}</span>}</div>
+    {children}
+  </div>
+)
+
+// Option-tile group with a satisfying selected state: ring, lift, checkmark, pop animation.
+const OptionGroup = ({ options, value, onChange, cols=3 }) => (
+  <div className="grid gap-2.5" style={{gridTemplateColumns:`repeat(${cols},minmax(0,1fr))`}}>
+    {options.map(o => {
+      const on = value === o.id
+      return (
+        <button key={o.id} type="button" onClick={()=>onChange(o.id)}
+          className={`${optClass(on)} flex-col py-3.5 ${on?'opt-pop -translate-y-0.5':''}`}>
+          {o.icon && <span className="text-xl leading-none">{o.icon}</span>}
+          <span>{o.label}</span>
+          {on && <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-sea-500 text-white text-[11px] flex items-center justify-center shadow">✓</span>}
+        </button>
+      )
+    })}
+  </div>
+)
+
+// Plus/minus number stepper — friendlier than a tiny number field.
+const Stepper = ({ value, set, min=1, max=40 }) => (
+  <div className="flex items-center rounded-xl border border-sand-200 bg-white overflow-hidden">
+    <button type="button" onClick={()=>set(Math.max(min, +value-1))} className="btn w-11 h-11 text-xl text-ink-soft hover:bg-sand-100">−</button>
+    <div className="flex-1 text-center text-[15px] font-semibold tabular-nums">{value}</div>
+    <button type="button" onClick={()=>set(Math.min(max, +value+1))} className="btn w-11 h-11 text-xl text-ink-soft hover:bg-sand-100">+</button>
+  </div>
+)
+
+const Modal = ({open, onClose, title, children, footer}) => {
+  useEffect(() => {
+    if (!open) return
+    const onKey = e => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
+  }, [open])
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-ink/55 backdrop-blur-sm fade-in" onClick={onClose}>
+      <div className="bg-sand-50 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-card max-h-[92vh] sm:max-h-[88vh] overflow-hidden flex flex-col sheet-up" onClick={e=>e.stopPropagation()}>
+        {/* grab handle (mobile) */}
+        <div className="sm:hidden pt-2.5 pb-1 flex justify-center"><div className="w-10 h-1.5 rounded-full bg-sand-300"/></div>
+        <div className="px-5 py-3.5 flex items-center justify-between border-b border-sand-200 bg-sand-50/95 sticky top-0 z-10">
+          <h3 className="font-display text-2xl">{title}</h3>
+          <button onClick={onClose} className="btn w-9 h-9 rounded-full bg-sand-100 hover:bg-sand-200 flex items-center justify-center text-ink-mute">✕</button>
+        </div>
+        <div className="overflow-y-auto px-5 py-5" style={{paddingBottom:'calc(env(safe-area-inset-bottom) + 20px)'}}>{children}</div>
+        {footer && <div className="px-5 py-4 border-t border-sand-200 bg-white" style={{paddingBottom:'calc(env(safe-area-inset-bottom) + 16px)'}}>{footer}</div>}
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────  data hooks  ───────────────────────────── */
+
+function useTable(table, opts={}) {
+  const [rows, setRows] = useState(null)
+  const [err, setErr]   = useState(null)
+  const reload = useCallback(async () => {
+    setErr(null)
+    let q = sb.from(table).select('*')
+    if (opts.order) q = q.order(opts.order, { ascending: opts.ascending !== false })
+    const { data, error } = await q
+    if (error) { console.error(`[al-saif] ${table} error:`, error); setErr(error); setRows([]) }
+    else setRows(data || [])
+  }, [table, opts.order, opts.ascending])
+  useEffect(() => { reload() }, [reload])
+  useEffect(() => {
+    const ch = sb.channel(`rt-${table}`).on('postgres_changes', { event:'*', schema:'public', table }, reload).subscribe()
+    return () => sb.removeChannel(ch)
+  }, [table, reload])
+  return { rows, err, reload }
+}
+
+/* ─────────────────────────────  avatar picker  ───────────────────────────── */
+
+function AvatarPicker({ users, onPick }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 fade-in">
+      <div className="text-center mb-12">
+        <div className="text-gold-500 tracking-[.4em] text-xs mb-3">A L · S A I F</div>
+        <h1 className="font-display text-5xl sm:text-6xl text-ink">Welcome home.</h1>
+        <p className="mt-4 text-ink-mute max-w-md mx-auto">The family concierge for our retreats across Shura Island and Amaala.</p>
+        <div className="divider-gold w-40 mx-auto mt-8"/>
+      </div>
+      <div className="text-ink-mute text-sm mb-6 tracking-wide">Who's here?</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full max-w-3xl">
+        {(users||[]).map(u => (
+          <button key={u.id} onClick={()=>onPick(u)}
+            className="btn group bg-white rounded-3xl p-6 shadow-card hover:shadow-soft hover:-translate-y-0.5 flex flex-col items-center gap-3">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center text-4xl"
+                 style={{background:`${u.color}14`, boxShadow:`0 0 0 2px ${u.color}33 inset`}}>
+              {u.emoji}
+            </div>
+            <div>
+              <div className="font-display text-2xl text-ink">{u.name}</div>
+              <div className="chip text-ink-mute mt-1">Tap to enter</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────  top bar  ───────────────────────────── */
+
+function TopBar({ user, view, setView, onSignOut, pendingTransport=0 }) {
+  const tabs = [
+    { id:'today',      label:'Today',      icon:'☀️' },
+    { id:'map',        label:'Map',        icon:'🗺' },
+    { id:'calendar',   label:'Calendar',   icon:'📅' },
+    { id:'book',       label:'Book',       icon:'✦', primary:true },
+    { id:'cars',       label:'Cars',       icon:'🚗', badge: pendingTransport },
+    { id:'insights',   label:'Insights',   icon:'📊' },
+    { id:'properties', label:'Properties', icon:'🏝' },
+  ]
+  const Badge = ({n}) => n > 0
+    ? <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold align-middle">{n}</span>
+    : null
+  return (
+    <header className="glass sticky top-0 z-30 border-b border-sand-200">
+      <div className="max-w-6xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between">
+        <button onClick={()=>setView('today')} className="flex items-baseline gap-2">
+          <span className="font-display text-2xl text-ink leading-none">Al Saif</span>
+          <span className="text-gold-500 tracking-[.3em] text-[10px] hidden sm:inline">CONCIERGE</span>
+        </button>
+        <nav className="hidden md:flex items-center gap-1">
+          {tabs.map(t => (
+            <button key={t.id} onClick={()=>setView(t.id)}
+              className={`btn px-4 py-2 rounded-full text-sm tracking-wide ${
+                view===t.id ? 'bg-ink text-sand-50' :
+                t.primary    ? 'bg-gold-500 text-white hover:bg-gold-600' :
+                               'text-ink-soft hover:bg-sand-200/60'
+              }`}>{t.label}<Badge n={t.badge}/></button>
+          ))}
+        </nav>
+        <button onClick={onSignOut} className="btn flex items-center gap-2 rounded-full bg-white px-2 py-1.5 pr-3 shadow-soft">
+          <span className="w-7 h-7 rounded-full flex items-center justify-center text-base"
+                style={{background:`${user.color}14`, boxShadow:`0 0 0 2px ${user.color}55 inset`}}>{user.emoji}</span>
+          <span className="text-sm font-medium text-ink">{user.name}</span>
+        </button>
+      </div>
+      {/* Mobile tab bar */}
+      <nav className="md:hidden flex items-center gap-1 px-2 pb-2 scroll-x">
+        {tabs.map(t => (
+          <button key={t.id} onClick={()=>setView(t.id)}
+            className={`btn px-4 py-1.5 rounded-full text-sm flex-shrink-0 ${
+              view===t.id ? 'bg-ink text-sand-50' :
+              t.primary    ? 'bg-gold-500 text-white' :
+                             'text-ink-soft bg-white'
+            }`}>{t.label}<Badge n={t.badge}/></button>
+        ))}
+      </nav>
+    </header>
+  )
+}
+
+/* ─────────────────────────────  Today view  ───────────────────────────── */
+
+function TodayView({ user, users, properties, bookings, setView, openBook, pendingTransport=0 }) {
+  const today = fmt.iso(new Date())
+  const live = bookings.filter(b => b.start_date <= today && b.end_date >= today)
+  const upcoming = bookings.filter(b => b.start_date > today).sort((a,b)=>a.start_date.localeCompare(b.start_date)).slice(0,5)
+  const recent = [...bookings].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,8)
+  const propOf = id => properties.find(p=>p.id===id)
+  const userOf = id => users.find(u=>u.id===id)
+  const theme = coastTheme()
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 space-y-10 fade-in">
+      {/* Hero — shifts with the real hour on the coast */}
+      <section className="relative overflow-hidden rounded-3xl px-6 sm:px-10 py-10 sm:py-14 shadow-card"
+               style={{ background: theme.sky }}>
+        <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full" style={{ background:'rgba(255,255,255,.10)' }}/>
+        <div className="absolute right-16 top-16 w-24 h-24 rounded-full" style={{ background:'rgba(255,255,255,.08)' }}/>
+        <div className="relative">
+          <div className="tracking-[.3em] text-xs mb-2" style={{ color: theme.sub }}>{fmt.long(new Date()).toUpperCase()} · {theme.label.toUpperCase()}</div>
+          <h1 className="font-display text-4xl sm:text-6xl leading-tight" style={{ color: theme.ink }}>
+            {greeting()}, {user.name}.
+          </h1>
+          <p className="mt-2 text-base sm:text-lg" style={{ color: theme.sub }}>
+            {live.length === 0
+              ? 'No one is on the coast right now. The villas are waiting.'
+              : `${live.length} ${live.length===1?'villa is':'villas are'} alive with family today.`}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Btn kind="gold" onClick={openBook}>✦ Book a stay</Btn>
+            <button onClick={()=>setView('map')}
+              className="btn rounded-full px-5 py-2.5 text-sm font-medium text-white"
+              style={{ background:'rgba(255,255,255,.16)', backdropFilter:'blur(4px)' }}>🗺 Open the map</button>
+          </div>
+        </div>
+      </section>
+
+      {/* Car requests awaiting arrangement */}
+      {pendingTransport > 0 && (
+        <button onClick={()=>setView('cars')}
+          className="btn w-full flex items-center gap-3 bg-white rounded-2xl shadow-soft p-4 text-left hover:shadow-card">
+          <span className="text-2xl">🚗</span>
+          <div className="flex-1">
+            <div className="font-medium text-ink">{pendingTransport} car request{pendingTransport>1?'s':''} need{pendingTransport>1?'':'s'} arranging</div>
+            <div className="text-xs text-ink-mute">Tap to open the transport inbox — anyone in the family can sort them.</div>
+          </div>
+          <span className="chip rounded-full px-2.5 py-1 bg-gold-50 text-gold-600">Open →</span>
+        </button>
+      )}
+
+      {/* Live now */}
+      <section>
+        <div className="flex items-end justify-between mb-3">
+          <h2 className="font-display text-2xl">On the coast right now</h2>
+          <button onClick={()=>setView('calendar')} className="text-sm text-sea-500 hover:underline">View calendar →</button>
+        </div>
+        {live.length === 0 ? (
+          <Card className="p-8 text-center">
+            <div className="text-5xl mb-3">🌊</div>
+            <div className="font-display text-xl text-ink">The shore is quiet.</div>
+            <div className="text-ink-mute text-sm mt-1">Want to change that?</div>
+            <Btn className="mt-4" kind="gold" onClick={openBook}>Book a stay</Btn>
+          </Card>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {live.map(b => <LiveCard key={b.id} booking={b} prop={propOf(b.property_id)} who={userOf(b.booked_by)} />)}
+          </div>
+        )}
+      </section>
+
+      {/* Upcoming */}
+      <section>
+        <div className="flex items-end justify-between mb-3">
+          <h2 className="font-display text-2xl">What's next</h2>
+          <button onClick={openBook} className="text-sm text-gold-600 hover:underline">+ New booking</button>
+        </div>
+        {upcoming.length === 0 ? (
+          <Card className="p-6 text-ink-mute text-center text-sm">No upcoming bookings.</Card>
+        ) : (
+          <div className="space-y-2">
+            {upcoming.map(b => <UpcomingRow key={b.id} booking={b} prop={propOf(b.property_id)} who={userOf(b.booked_by)} />)}
+          </div>
+        )}
+      </section>
+
+      {/* Activity */}
+      <section>
+        <h2 className="font-display text-2xl mb-3">Family feed</h2>
+        <Card className="divide-y divide-sand-100">
+          {recent.length === 0 && <div className="p-6 text-center text-ink-mute text-sm">Nothing yet — be the first to book.</div>}
+          {recent.map(b => {
+            const w = userOf(b.booked_by), p = propOf(b.property_id)
+            if (!w || !p) return null
+            return (
+              <div key={b.id} className="p-4 flex items-start gap-3">
+                <span className="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
+                      style={{background:`${w.color}14`, boxShadow:`0 0 0 2px ${w.color}33 inset`}}>{w.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-ink">
+                    <span className="font-semibold">{w.name}</span>{' '}
+                    booked <span className="font-medium">{p.name}</span>{' '}
+                    <span className="text-ink-mute">· {fmt.short(b.start_date)} → {fmt.short(b.end_date)} · {nights(b.start_date,b.end_date)} night{nights(b.start_date,b.end_date)>1?'s':''} · {b.guest_count} guest{b.guest_count>1?'s':''}</span>
+                  </div>
+                  {b.guest_names && <div className="text-xs text-ink-mute mt-0.5 truncate">with {b.guest_names}</div>}
+                </div>
+                <div className="text-xs text-ink-mute flex-shrink-0">{fmt.rel(b.created_at)}</div>
+              </div>
+            )
+          })}
+        </Card>
+      </section>
+    </div>
+  )
+}
+
+const greeting = () => {
+  const h = new Date().getHours()
+  if (h < 5) return 'Late night'
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function LiveCard({ booking, prop, who }) {
+  if (!prop || !who) return null
+  return (
+    <Card className="p-5 relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-10 -mr-8 -mt-8" style={{background:prop.color}}/>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-2 h-2 rounded-full bg-emerald-500 pulse-dot"/>
+        <span className="chip text-emerald-700">In residence</span>
+      </div>
+      <div className="font-display text-xl text-ink">{prop.name}</div>
+      <div className="text-ink-mute text-sm">{prop.location} · {prop.bedrooms} BR</div>
+      <div className="mt-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{background:`${who.color}14`, boxShadow:`0 0 0 2px ${who.color}33 inset`}}>{who.emoji}</span>
+          <div>
+            <div className="text-sm font-medium">{who.name}</div>
+            <div className="text-xs text-ink-mute">{booking.guest_count} guest{booking.guest_count>1?'s':''}</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs text-ink-mute">until</div>
+          <div className="text-sm font-medium">{fmt.short(booking.end_date)}</div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function UpcomingRow({ booking, prop, who }) {
+  if (!prop || !who) return null
+  return (
+    <Card className="p-4 flex items-center gap-4">
+      <div className="text-center w-14 flex-shrink-0">
+        <div className="text-xs text-ink-mute">{parseLocal(booking.start_date).toLocaleString('en-GB',{month:'short'})}</div>
+        <div className="font-display text-2xl text-ink leading-none">{parseLocal(booking.start_date).getDate()}</div>
+      </div>
+      <div className="w-1 self-stretch rounded-full" style={{background:prop.color}}/>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-ink truncate">{prop.name}</div>
+        <div className="text-xs text-ink-mute">{nights(booking.start_date,booking.end_date)} night{nights(booking.start_date,booking.end_date)>1?'s':''} · {fmt.rel(booking.start_date)}</div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-7 h-7 rounded-full flex items-center justify-center text-sm"
+              style={{background:`${who.color}14`, boxShadow:`0 0 0 2px ${who.color}33 inset`}}>{who.emoji}</span>
+        <span className="text-sm hidden sm:inline">{who.name}</span>
+      </div>
+    </Card>
+  )
+}
+
+/* ─────────────────────────────  Calendar view  ───────────────────────────── */
+
+function CalendarView({ properties, users, bookings, openBookFor, onChanged }) {
+  const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d })
+  const [selDate, setSelDate] = useState(null)
+  const [filterProp, setFilterProp] = useState('all')
+  const [deleting, setDeleting] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null)
+
+  const del = async (b) => {
+    setDeleting(b.id)
+    await sb.from('bookings').delete().eq('id', b.id)
+    if (onChanged) { try { await onChanged() } catch(e){ console.error(e) } }
+    setDeleting(null); setConfirmDel(null)
+  }
+
+  const visible = useMemo(() => filterProp==='all' ? bookings : bookings.filter(b => b.property_id===filterProp), [bookings, filterProp])
+
+  const grid = useMemo(() => {
+    const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
+    const startWeekday = first.getDay()
+    const days = []
+    for (let i = 0; i < startWeekday; i++) days.push(null)
+    const last = new Date(cursor.getFullYear(), cursor.getMonth()+1, 0).getDate()
+    for (let d = 1; d <= last; d++) days.push(new Date(cursor.getFullYear(), cursor.getMonth(), d))
+    while (days.length % 7) days.push(null)
+    return days
+  }, [cursor])
+
+  const bookingsOn = d => { const iso = fmt.iso(d); return visible.filter(b => iso >= b.start_date && iso <= b.end_date) }
+  const propOf = id => properties.find(p=>p.id===id)
+  const userOf = id => users.find(u=>u.id===id)
+  const today = fmt.iso(new Date())
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 fade-in">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <button onClick={()=>setCursor(new Date(cursor.getFullYear(), cursor.getMonth()-1, 1))} className="btn w-9 h-9 rounded-full bg-white shadow-soft">←</button>
+          <h2 className="font-display text-3xl text-ink min-w-[14ch] text-center">{fmt.month(cursor)}</h2>
+          <button onClick={()=>setCursor(new Date(cursor.getFullYear(), cursor.getMonth()+1, 1))} className="btn w-9 h-9 rounded-full bg-white shadow-soft">→</button>
+          <button onClick={()=>{ const d=new Date(); d.setDate(1); setCursor(d) }} className="btn ml-2 px-3 py-1.5 rounded-full text-xs bg-sand-200/70 text-ink-soft">Today</button>
+        </div>
+        <select value={filterProp} onChange={e=>setFilterProp(e.target.value)}
+          className="rounded-full bg-white shadow-soft px-4 py-2 text-sm border-0 focus:ring-2 focus:ring-sea-500/30">
+          <option value="all">All properties</option>
+          {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </div>
+
+      <Card className="overflow-hidden">
+        <div className="grid grid-cols-7 text-center text-xs text-ink-mute py-2 border-b border-sand-100 bg-sand-50/60">
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div key={d} className="tracking-widest">{d.toUpperCase()}</div>)}
+        </div>
+        <div className="grid grid-cols-7">
+          {grid.map((d,i) => {
+            if (!d) return <div key={i} className="aspect-square border-r border-b border-sand-100 bg-sand-50/30"/>
+            const bs = bookingsOn(d)
+            const iso = fmt.iso(d)
+            const isToday = iso === today
+            const isSel = selDate && sameDay(selDate, d)
+            return (
+              <button key={i} onClick={()=>setSelDate(d)}
+                className={`aspect-square border-r border-b border-sand-100 p-1.5 sm:p-2 text-left flex flex-col gap-1 hover:bg-sand-50 ${isSel?'bg-sea-50/60':''}`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs sm:text-sm ${isToday?'w-6 h-6 rounded-full bg-ink text-sand-50 flex items-center justify-center font-medium':''}`}>{d.getDate()}</span>
+                </div>
+                <div className="flex flex-wrap gap-0.5 mt-auto">
+                  {bs.slice(0,4).map(b => {
+                    const p = propOf(b.property_id)
+                    return <span key={b.id} className="w-1.5 h-1.5 rounded-full" style={{background:p?.color||'#999'}}/>
+                  })}
+                  {bs.length > 4 && <span className="text-[9px] text-ink-mute">+{bs.length-4}</span>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </Card>
+
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap gap-3">
+        {properties.map(p => (
+          <div key={p.id} className="flex items-center gap-1.5 text-xs text-ink-soft">
+            <span className="w-2.5 h-2.5 rounded-full" style={{background:p.color}}/>{p.name}
+          </div>
+        ))}
+      </div>
+
+      {/* Day detail */}
+      {selDate && (
+        <Card className="mt-6 p-5 fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="font-display text-2xl">{fmt.long(selDate)}</div>
+              <div className="text-ink-mute text-sm">{fmt.rel(selDate)}</div>
+            </div>
+            <Btn kind="gold" onClick={()=>openBookFor(fmt.iso(selDate))}>Book this day</Btn>
+          </div>
+          {(() => {
+            const items = bookingsOn(selDate)
+            if (items.length === 0) return <div className="text-ink-mute text-sm p-4 text-center">Nothing scheduled — all properties available.</div>
+            return (
+              <div className="space-y-2">
+                {items.map(b => {
+                  const p = propOf(b.property_id), w = userOf(b.booked_by)
+                  return (
+                    <div key={b.id} className="flex items-center gap-3 p-3 rounded-xl bg-sand-50/60 group">
+                      <span className="w-1.5 h-10 rounded-full" style={{background:p?.color}}/>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">{p?.name}</div>
+                        <div className="text-xs text-ink-mute">{w?.emoji} {w?.name} · {b.guest_count} guest{b.guest_count>1?'s':''} {b.guest_names ? `· ${b.guest_names}` : ''}</div>
+                      </div>
+                      <div className="text-xs text-ink-mute text-right">{fmt.short(b.start_date)} → {fmt.short(b.end_date)}</div>
+                      {confirmDel === b.id ? (
+                        <div className="flex items-center gap-1">
+                          <button onClick={()=>del(b)} disabled={deleting===b.id}
+                            className="btn text-xs px-2 py-1 rounded-full bg-rose-600 text-white">{deleting===b.id?'…':'Cancel it'}</button>
+                          <button onClick={()=>setConfirmDel(null)} className="btn text-xs px-2 py-1 rounded-full bg-sand-200 text-ink-soft">Keep</button>
+                        </div>
+                      ) : (
+                        <button onClick={()=>setConfirmDel(b.id)} title="Cancel booking"
+                          className="btn w-7 h-7 rounded-full text-ink-mute hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center">✕</button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </Card>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────  Booking form  ───────────────────────────── */
+
+function BookForm({ user, properties, bookings, onClose, onSaved, prefill }) {
+  const [step, setStep] = useState(1)
+  const [propertyId, setPropertyId] = useState(prefill?.propertyId || '')
+  const [start, setStart] = useState(prefill?.date || fmt.iso(new Date()))
+  const [end, setEnd] = useState(prefill?.date || fmt.iso(new Date(Date.now()+86400000)))
+  const [purpose, setPurpose] = useState('family')
+  const [guestCount, setGuestCount] = useState(2)
+  const [names, setNames] = useState(['',''])     // one box per guest
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  const prop = properties.find(p=>p.id===propertyId)
+  const n = nights(start, end)
+  const value = (prop?.nightly_rate_sar || 0) * n
+
+  // changing the guest count resizes the per-guest name boxes (keeping what's typed)
+  const changeCount = c => {
+    c = Math.max(1, Math.min(40, c || 1))
+    setGuestCount(c)
+    setNames(prev => { const next = prev.slice(0, c); while (next.length < c) next.push(''); return next })
+  }
+  const setName = (i, v) => setNames(prev => prev.map((x,idx)=> idx===i ? v : x))
+
+  const conflicts = useMemo(() => {
+    if (!propertyId) return []
+    return bookings.filter(b => b.property_id === propertyId && rangeOverlaps(b.start_date, b.end_date, start, end))
+  }, [bookings, propertyId, start, end])
+
+  const save = async () => {
+    setSaving(true); setError(null)
+    const guest_names = names.map(s=>s.trim()).filter(Boolean).join(', ')
+    const { error } = await sb.from('bookings').insert({
+      property_id: propertyId,
+      booked_by: user.id,
+      start_date: start,
+      end_date: end,
+      purpose, guest_count: guestCount,
+      guest_names: guest_names || null,
+      notes: notes || null,
+    })
+    if (error) { setSaving(false); setError(error.message); return }
+    if (onSaved) { try { await onSaved() } catch (e) { console.error(e) } }
+    setSaving(false)
+    celebrate()
+    onClose(true)
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Step indicator */}
+      <div className="flex items-center gap-2">
+        {[1,2,3].map(i => (
+          <div key={i} className={`flex-1 h-1 rounded-full ${i<=step?'bg-gold-500':'bg-sand-200'}`}/>
+        ))}
+      </div>
+
+      {step === 1 && (
+        <div className="space-y-3">
+          <div className="text-sm font-medium text-ink-soft">Choose a property</div>
+          <div className="grid gap-2">
+            {properties.map(p => (
+              <button key={p.id} onClick={()=>setPropertyId(p.id)}
+                className={`text-left p-4 rounded-2xl border bg-white transition ${propertyId===p.id?'border-sea-500 ring-2 ring-sea-500/20':'border-sand-200 hover:border-ink-soft/30'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-display text-lg" style={{background:p.color}}>{p.bedrooms}BR</div>
+                  <div className="flex-1">
+                    <div className="font-medium text-ink">{p.name}</div>
+                    <div className="text-xs text-ink-mute">{p.location} · {fmt.sar(p.nightly_rate_sar)} / night</div>
+                  </div>
+                  {p.is_owned && <Chip tone="gold">Owned</Chip>}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Check-in"><input type="date" value={start} onChange={e=>{ setStart(e.target.value); if (e.target.value > end) setEnd(e.target.value) }} className={IPT}/></Field>
+            <Field label="Check-out"><input type="date" value={end} min={start} onChange={e=>setEnd(e.target.value)} className={IPT}/></Field>
+          </div>
+          <div className="bg-gradient-to-br from-sand-100 to-sand-200/60 rounded-2xl p-5 flex items-center justify-between">
+            <div>
+              <div className="text-[12px] text-ink-mute uppercase tracking-wider">Duration</div>
+              <div className="font-display text-2xl">{n} night{n>1?'s':''}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[12px] text-ink-mute uppercase tracking-wider">Shadow value</div>
+              <div className="font-display text-2xl text-gold-600">{fmt.sar(value)}</div>
+            </div>
+          </div>
+          {conflicts.length > 0 && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl p-3 text-sm">
+              <div className="font-medium mb-1">⚠ Date conflict</div>
+              <div className="text-xs">{conflicts.map(c => `${fmt.short(c.start_date)}–${fmt.short(c.end_date)}`).join(', ')} is already booked here.</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-5">
+          <Field label="Who's going?">
+            <OptionGroup options={AUDIENCES} value={purpose} onChange={setPurpose} cols={3} />
+            <div className="text-[12px] text-ink-mute mt-1.5">{audienceOf(purpose)?.hint}</div>
+          </Field>
+
+          <Field label="How many guests?">
+            <div className="w-40"><Stepper value={guestCount} set={changeCount} max={40} /></div>
+          </Field>
+
+          <Field label="Guest names" hint="optional — one per guest">
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {names.map((nm, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-7 h-7 rounded-full bg-sand-100 text-ink-mute text-xs flex items-center justify-center flex-shrink-0 font-medium">{i+1}</span>
+                  <input className={IPT} placeholder={`Guest ${i+1}`} value={nm} onChange={e=>setName(i, e.target.value)} />
+                </div>
+              ))}
+            </div>
+          </Field>
+
+          <Field label="Notes" hint="optional">
+            <textarea rows="2" placeholder="Arrival time, chef requests, occasion…" value={notes} onChange={e=>setNotes(e.target.value)} className={IPT}/>
+          </Field>
+
+          <Card className="p-4 bg-sand-50/80">
+            <div className="text-[12px] text-ink-mute uppercase tracking-wider mb-1">Summary</div>
+            <div className="font-display text-xl">{prop?.name}</div>
+            <div className="text-sm text-ink-soft">{fmt.date(start)} → {fmt.date(end)} · {n} night{n>1?'s':''}</div>
+            <div className="text-sm text-ink-soft">{guestCount} guest{guestCount>1?'s':''} · {audienceOf(purpose)?.icon} {audienceOf(purpose)?.label}</div>
+            <div className="text-sm text-gold-600 mt-2">Shadow value · {fmt.sar(value)}</div>
+          </Card>
+          {error && <div className="text-rose-600 text-sm">{error}</div>}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-2">
+        <button onClick={()=>step>1 ? setStep(step-1) : onClose(false)} className="text-sm text-ink-mute hover:text-ink">
+          {step>1 ? '← Back' : 'Cancel'}
+        </button>
+        {step < 3 ? (
+          <Btn onClick={()=>setStep(step+1)} disabled={step===1 && !propertyId}>Continue</Btn>
+        ) : (
+          <Btn kind="gold" onClick={save} disabled={saving || !propertyId}>{saving?'Booking…':'Confirm booking'}</Btn>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────  Insights view  ───────────────────────────── */
+
+function InsightsView({ users, properties, bookings, setView }) {
+  const [year, setYear] = useState(new Date().getFullYear())
+  const years = useMemo(() => {
+    const s = new Set(bookings.map(b => parseLocal(b.start_date).getFullYear()))
+    s.add(new Date().getFullYear())
+    return [...s].sort((a,b)=>b-a)
+  }, [bookings])
+
+  const inYear = bookings.filter(b => parseLocal(b.start_date).getFullYear() === year)
+  const propOf = id => properties.find(p=>p.id===id)
+
+  const totalNights  = inYear.reduce((s,b) => s + nights(b.start_date,b.end_date), 0)
+  const totalGuests  = inYear.reduce((s,b) => s + (b.guest_count||0), 0)
+  const totalValue   = inYear.reduce((s,b) => {
+    const p = propOf(b.property_id); return s + (p?.nightly_rate_sar||0) * nights(b.start_date,b.end_date)
+  }, 0)
+
+  const byUser = users.map(u => {
+    const my = inYear.filter(b => b.booked_by === u.id)
+    const nightsUsed = my.reduce((s,b)=>s+nights(b.start_date,b.end_date), 0)
+    const value = my.reduce((s,b) => { const p = propOf(b.property_id); return s + (p?.nightly_rate_sar||0) * nights(b.start_date,b.end_date) }, 0)
+    return { ...u, bookings: my.length, nights: nightsUsed, guests: my.reduce((s,b)=>s+(b.guest_count||0),0), value }
+  }).sort((a,b)=>b.nights-a.nights)
+
+  const byProp = properties.map(p => {
+    const my = inYear.filter(b => b.property_id === p.id)
+    const ns = my.reduce((s,b)=>s+nights(b.start_date,b.end_date),0)
+    return { ...p, bookings: my.length, nights: ns, value: ns * (p.nightly_rate_sar||0), occupancy: Math.round((ns / 365) * 100) }
+  }).sort((a,b)=>b.nights-a.nights)
+
+  const byMonth = Array.from({length:12}, (_,m) => {
+    const monthBookings = inYear.filter(b => parseLocal(b.start_date).getMonth() === m)
+    return { m, count: monthBookings.length, nights: monthBookings.reduce((s,b)=>s+nights(b.start_date,b.end_date),0) }
+  })
+  const maxMonth = Math.max(1, ...byMonth.map(m=>m.nights))
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 space-y-8 fade-in">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <div className="text-gold-500 tracking-[.3em] text-xs mb-2">RECEIPTS & PATTERNS</div>
+          <h1 className="font-display text-4xl text-ink">Insights · {year}</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Btn kind="gold" onClick={()=>setView('wrapped')}>✨ {year} Wrapped</Btn>
+          <select value={year} onChange={e=>setYear(+e.target.value)} className="rounded-full bg-white shadow-soft px-4 py-2 text-sm">
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Headline numbers */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Total nights"  value={totalNights}  sub="across all villas"/>
+        <Stat label="Total guests"  value={totalGuests}  sub="hosted"/>
+        <Stat label="Bookings"      value={inYear.length} sub="this year"/>
+        <Stat label="Shadow value"  value={fmt.sar(totalValue)} sub="if guests had paid" tone="gold"/>
+      </div>
+
+      {/* Per family member */}
+      <section>
+        <h2 className="font-display text-2xl mb-3">By family member</h2>
+        <Card className="divide-y divide-sand-100">
+          {byUser.map(u => (
+            <div key={u.id} className="p-4 grid grid-cols-12 items-center gap-3">
+              <div className="col-span-5 sm:col-span-3 flex items-center gap-3">
+                <span className="w-10 h-10 rounded-full flex items-center justify-center text-xl"
+                      style={{background:`${u.color}14`, boxShadow:`0 0 0 2px ${u.color}33 inset`}}>{u.emoji}</span>
+                <span className="font-medium">{u.name}</span>
+              </div>
+              <div className="col-span-2 text-center">
+                <div className="font-display text-xl">{u.nights}</div>
+                <div className="text-[10px] text-ink-mute tracking-wider uppercase">nights</div>
+              </div>
+              <div className="col-span-2 text-center">
+                <div className="font-display text-xl">{u.bookings}</div>
+                <div className="text-[10px] text-ink-mute tracking-wider uppercase">stays</div>
+              </div>
+              <div className="col-span-3 text-center">
+                <div className="font-display text-xl">{u.guests}</div>
+                <div className="text-[10px] text-ink-mute tracking-wider uppercase">guests hosted</div>
+              </div>
+              <div className="col-span-12 sm:col-span-2 text-right">
+                <div className="font-display text-xl text-gold-600">{fmt.sar(u.value)}</div>
+                <div className="text-[10px] text-ink-mute tracking-wider uppercase">shadow value</div>
+              </div>
+            </div>
+          ))}
+        </Card>
+      </section>
+
+      {/* Per property */}
+      <section>
+        <h2 className="font-display text-2xl mb-3">By property</h2>
+        <Card className="overflow-hidden">
+          <div className="hidden sm:grid grid-cols-12 text-xs text-ink-mute uppercase tracking-wider px-4 py-2 bg-sand-50/60 border-b border-sand-100">
+            <div className="col-span-5">Villa</div>
+            <div className="col-span-2 text-center">Nights</div>
+            <div className="col-span-2 text-center">Bookings</div>
+            <div className="col-span-1 text-center">Occ.</div>
+            <div className="col-span-2 text-right">Shadow value</div>
+          </div>
+          {byProp.map(p => (
+            <div key={p.id} className="p-4 sm:grid sm:grid-cols-12 sm:items-center gap-3 border-b border-sand-100 last:border-b-0">
+              <div className="col-span-5 flex items-center gap-3">
+                <span className="w-1.5 h-10 rounded-full" style={{background:p.color}}/>
+                <div>
+                  <div className="font-medium">{p.name}</div>
+                  <div className="text-xs text-ink-mute">{p.location}</div>
+                </div>
+              </div>
+              <div className="col-span-2 text-center mt-2 sm:mt-0"><span className="font-display text-lg">{p.nights}</span> <span className="text-xs text-ink-mute sm:hidden">nights</span></div>
+              <div className="col-span-2 text-center"><span className="font-display text-lg">{p.bookings}</span> <span className="text-xs text-ink-mute sm:hidden">stays</span></div>
+              <div className="col-span-1 text-center">
+                <div className="font-display text-lg">{p.occupancy}%</div>
+              </div>
+              <div className="col-span-2 text-right"><span className="font-display text-lg text-gold-600">{fmt.sar(p.value)}</span></div>
+            </div>
+          ))}
+        </Card>
+      </section>
+
+      {/* By month */}
+      <section>
+        <h2 className="font-display text-2xl mb-3">When we go</h2>
+        <Card className="p-5">
+          <div className="grid grid-cols-12 gap-2 items-end h-40">
+            {byMonth.map(m => (
+              <div key={m.m} className="flex flex-col items-center gap-1.5">
+                <div className="text-[10px] text-ink-mute">{m.nights||''}</div>
+                <div className="w-full bg-gradient-to-t from-sea-500 to-sea-500/40 rounded-t-lg transition-all"
+                     style={{height: `${(m.nights/maxMonth)*100}%`, minHeight:m.nights?'4px':'0'}}/>
+                <div className="text-[10px] text-ink-mute tracking-wider">
+                  {new Date(2000, m.m, 1).toLocaleString('en',{month:'short'}).toUpperCase()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </section>
+    </div>
+  )
+}
+
+function Stat({ label, value, sub, tone='ink' }) {
+  const colors = { ink:'text-ink', gold:'text-gold-600', sea:'text-sea-500' }
+  return (
+    <Card className="p-5">
+      <div className="text-xs text-ink-mute uppercase tracking-wider">{label}</div>
+      <div className={`font-display text-3xl mt-1 ${colors[tone]}`}>{value}</div>
+      <div className="text-xs text-ink-mute mt-1">{sub}</div>
+    </Card>
+  )
+}
+
+/* ─────────────────────────────  Properties view  ───────────────────────────── */
+
+function PropertiesView({ properties, bookings, openBookFor, onUpdate }) {
+  const [editing, setEditing] = useState(null)
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 fade-in">
+      <div className="mb-6">
+        <div className="text-gold-500 tracking-[.3em] text-xs mb-2">THE PORTFOLIO</div>
+        <h1 className="font-display text-4xl text-ink">Our retreats</h1>
+        <p className="text-ink-mute mt-1">Six villas across Shura Island and Amaala. Tap a card to edit details.</p>
+      </div>
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {properties.map(p => {
+          const count = bookings.filter(b => b.property_id === p.id).length
+          return (
+            <Card key={p.id} className="overflow-hidden">
+              <div className="h-24 relative" style={{background:`linear-gradient(135deg, ${p.color}, ${p.color}cc)`}}>
+                <div className="absolute inset-0 flex items-center justify-center text-white font-display text-4xl opacity-30">{p.hotel}</div>
+                {p.is_owned && <span className="absolute top-3 right-3 chip bg-white/90 text-gold-600 rounded-full px-2 py-0.5">OWNED</span>}
+              </div>
+              <div className="p-5">
+                <div className="font-display text-xl text-ink">{p.name}</div>
+                <div className="text-sm text-ink-mute mt-0.5">{p.location} · {p.bedrooms} bedroom{p.bedrooms>1?'s':''}</div>
+                {p.description && <p className="text-sm text-ink-soft mt-3 line-clamp-2">{p.description}</p>}
+                <div className="mt-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-ink-mute">Nightly rate</div>
+                    <div className="font-display text-lg">{fmt.sar(p.nightly_rate_sar)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-ink-mute">All-time bookings</div>
+                    <div className="font-display text-lg">{count}</div>
+                  </div>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Btn className="flex-1" kind="soft" onClick={()=>setEditing(p)}>Edit</Btn>
+                  <Btn className="flex-1" kind="primary" onClick={()=>openBookFor(null, p.id)}>Book</Btn>
+                </div>
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+
+      {editing && <PropertyEditor property={editing} onClose={()=>setEditing(null)} onSaved={()=>{ setEditing(null); onUpdate() }} />}
+    </div>
+  )
+}
+
+function PropertyEditor({ property, onClose, onSaved }) {
+  const [name, setName]   = useState(property.name)
+  const [rate, setRate]   = useState(property.nightly_rate_sar)
+  const [desc, setDesc]   = useState(property.description||'')
+  const [active, setActive] = useState(property.is_active !== false)
+  const [saving, setSaving] = useState(false)
+  const save = async () => {
+    setSaving(true)
+    await sb.from('properties').update({ name, nightly_rate_sar:+rate, description:desc, is_active:active }).eq('id', property.id)
+    setSaving(false); onSaved()
+  }
+  return (
+    <Modal open onClose={onClose} title={`Edit · ${property.hotel}`} footer={
+      <div className="flex justify-end gap-2">
+        <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn kind="gold" onClick={save} disabled={saving}>{saving?'Saving…':'Save changes'}</Btn>
+      </div>
+    }>
+      <div className="space-y-5">
+        <Field label="Name"><input className={IPT} value={name} onChange={e=>setName(e.target.value)}/></Field>
+        <Field label="Nightly rate (SAR)"><input type="number" className={IPT} value={rate} onChange={e=>setRate(e.target.value)}/></Field>
+        <Field label="Description"><textarea rows="3" className={IPT} value={desc} onChange={e=>setDesc(e.target.value)}/></Field>
+        <label className="flex items-center gap-2.5 text-[15px] text-ink-soft cursor-pointer">
+          <input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)} className="w-5 h-5 accent-sea-500"/>
+          Active (show in bookings)
+        </label>
+      </div>
+    </Modal>
+  )
+}
+
+/* ─────────────────────────────  Coast map view  ───────────────────────────── */
+
+function MapView({ properties, bookings, openBookFor, setView, onChanged }) {
+  const elRef = useRef(null), mapRef = useRef(null), layerRef = useRef(null)
+  const today = fmt.iso(new Date())
+  const occupiedNow = id => bookings.some(b => b.property_id===id && b.start_date<=today && b.end_date>=today)
+
+  const [mode, setMode] = useState('view')       // 'view' | 'place'
+  const [activeSlug, setActiveSlug] = useState(null)
+  const [tick, setTick] = useState(0)            // bump to redraw after a local placement
+  const [syncNote, setSyncNote] = useState(false)
+
+  // refs so the once-bound map click handler always sees current values
+  const modeRef = useRef(mode);            modeRef.current = mode
+  const activeRef = useRef(activeSlug);    activeRef.current = activeSlug
+  const propsRef = useRef(properties);     propsRef.current = properties
+  const placeRef = useRef(() => {})
+
+  const anyPlaced = properties.some(p => coordsFor(p, loadLocalPins())?.placed)
+
+  // save a villa's coordinate (localStorage instantly + DB for sharing)
+  const saveCoord = async (prop, latlng, advance) => {
+    saveLocalPin(prop.slug, latlng.lat, latlng.lng)
+    setTick(t => t + 1)
+    if (advance) {
+      const pins = loadLocalPins()
+      const next = propsRef.current.find(p => p.slug !== prop.slug && p.lat == null && !pins[p.slug])
+      setActiveSlug(next ? next.slug : null)
+    }
+    const { error } = await sb.from('properties').update({ lat: latlng.lat, lng: latlng.lng }).eq('id', prop.id)
+    if (error) setSyncNote(true)
+    else if (onChanged) { try { await onChanged() } catch (e) { console.error(e) } }
+  }
+  placeRef.current = (latlng) => {
+    const prop = propsRef.current.find(p => p.slug === activeRef.current)
+    if (prop) saveCoord(prop, latlng, true)
+  }
+
+  // init map once
+  useEffect(() => {
+    if (!elRef.current || mapRef.current || typeof L === 'undefined') return
+    const map = L.map(elRef.current, { zoomControl:true, scrollWheelZoom:true })
+    mapRef.current = map
+    window.__map = map  // exposed for debugging
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      // Esri imagery for Shura/Amaala tops out at z17; beyond that it returns a
+      // "data not available" placeholder. Cap tile fetching at 17 but let the map
+      // zoom to 19 — Leaflet upscales the sharp z17 tile (a little soft, never blank).
+      maxNativeZoom: 17, maxZoom: 19, attribution: 'Imagery © Esri, Maxar'
+    }).addTo(map)
+    map.setView([SHURA_CENTER.lat, SHURA_CENTER.lng], 13)
+    map.on('click', e => { if (modeRef.current === 'place' && activeRef.current) placeRef.current(e.latlng) })
+    const fit = () => {
+      const pins = loadLocalPins()
+      const placed = properties.map(p => coordsFor(p, pins)).filter(c => c && c.placed).map(c => [c.lat, c.lng])
+      if (placed.length > 1) map.fitBounds(L.latLngBounds(placed).pad(0.5))
+      else if (placed.length === 1) map.setView(placed[0], 16)
+      else map.setView([SHURA_CENTER.lat, SHURA_CENTER.lng], 13)
+    }
+    setTimeout(() => { map.invalidateSize(); fit() }, 300)
+    return () => { map.remove(); mapRef.current = null }
+  }, [])
+
+  // (re)draw pins
+  useEffect(() => {
+    const map = mapRef.current; if (!map || typeof L === 'undefined') return
+    if (layerRef.current) map.removeLayer(layerRef.current)
+    const layer = L.layerGroup().addTo(map); layerRef.current = layer
+    const pins = loadLocalPins()
+    const placing = mode === 'place'
+    properties.forEach(p => {
+      const c = coordsFor(p, pins); if (!c) return
+      if (!c.placed && !placing) return            // in view mode, only show placed villas
+      const occ = occupiedNow(p.id)
+      const isActive = placing && p.slug === activeSlug
+      const short = p.name.replace(/\s+—.*/, '')
+      const cls = `map-pin ${occ?'occ':''} ${!c.placed?'ghost':''} ${isActive?'active':''}`
+      const html = `<div class="${cls}" style="--c:${p.color}"><div class="map-pin-dot"></div>
+        <div class="map-pin-label">${short}<span>${p.bedrooms}BR</span></div></div>`
+      const icon = L.divIcon({ className:'map-pin-wrap', html, iconSize:[18,18], iconAnchor:[9,9] })
+      const m = L.marker([c.lat, c.lng], { icon, draggable: placing }).addTo(layer)
+      if (placing) {
+        m.on('dragend', () => saveCoord(p, m.getLatLng(), false))
+        m.on('click', () => setActiveSlug(p.slug))
+      } else {
+        m.bindPopup(`<div style="min-width:170px">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:19px;color:#1c2733;line-height:1.1">${p.name}</div>
+          <div style="font-size:12px;color:#6b7785;margin:4px 0 8px">${p.location} · ${p.bedrooms}BR · ${occ?'🟢 In residence now':'Available'}</div>
+          <button id="bk-${p.id}" style="background:#0c4a6e;color:#fff;border:none;border-radius:999px;padding:7px 16px;font-size:13px;cursor:pointer">Book this villa</button></div>`)
+        m.on('popupopen', () => { const b=document.getElementById('bk-'+p.id); if (b) b.onclick = () => openBookFor(null, p.id) })
+      }
+    })
+  }, [properties, bookings, tick, mode, activeSlug])
+
+  const liveCount = properties.filter(p => occupiedNow(p.id)).length
+  const placedCount = properties.filter(p => coordsFor(p, loadLocalPins())?.placed).length
+  const startPlacing = () => {
+    setMode('place')
+    const pins = loadLocalPins()
+    const firstUnplaced = properties.find(p => p.lat == null && !pins[p.slug]) || properties[0]
+    setActiveSlug(firstUnplaced?.slug || null)
+  }
+  const activeName = properties.find(p => p.slug === activeSlug)?.name
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 fade-in">
+      <div className="flex items-end justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <div className="text-gold-500 tracking-[.3em] text-xs mb-2">THE COAST</div>
+          <h1 className="font-display text-4xl text-ink">Our islands</h1>
+          <p className="text-ink-mute mt-1">
+            {mode === 'place'
+              ? 'Placing pins — tap the island where each villa sits.'
+              : (liveCount > 0 ? `${liveCount} villa${liveCount>1?'s':''} glowing — family in residence now.` : 'Tap a villa to book. Pins pulse when family is in residence.')}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {mode === 'view'
+            ? <Btn kind="outline" onClick={startPlacing}>📍 Place pins</Btn>
+            : <Btn kind="primary" onClick={()=>{ setMode('view'); setActiveSlug(null) }}>✓ Done</Btn>}
+          <Btn kind="gold" onClick={()=>openBookFor()}>✦ Book</Btn>
+        </div>
+      </div>
+
+      <div ref={elRef} className="w-full h-[64vh] min-h-[420px] rounded-3xl shadow-card z-0"/>
+
+      {mode === 'place' && (
+        <div className="mt-3 bg-white rounded-2xl shadow-soft p-4 fade-in">
+          <div className="text-sm text-ink-soft mb-3">
+            {activeSlug
+              ? <>Now tap the map where <b className="text-ink">{activeName}</b> sits. (You can drag any pin to fine-tune.)</>
+              : <>All villas placed 🎉 Drag any pin to adjust, or tap <b>Done</b>.</>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {properties.map(p => {
+              const placed = coordsFor(p, loadLocalPins())?.placed
+              const active = p.slug === activeSlug
+              return (
+                <button key={p.id} onClick={()=>setActiveSlug(p.slug)}
+                  className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs border ${active?'border-sea-500 bg-sea-50':'border-sand-200 bg-white'}`}>
+                  <span className="w-2.5 h-2.5 rounded-full" style={{background:p.color}}/>
+                  {p.name.replace(/\s+—.*/, '')} {p.name.match(/\d+BR|Home/)?.[0]||''}
+                  <span className={placed?'text-emerald-600':'text-ink-mute'}>{placed?'✓':'• tap to place'}</span>
+                </button>
+              )
+            })}
+          </div>
+          {syncNote && (
+            <div className="mt-3 text-xs text-gold-700 bg-gold-50 border border-gold-300/40 rounded-xl px-3 py-2">
+              Pins are saved on <b>this device</b>. To share them with the whole family, run the 2-line <code className="bg-white px-1 rounded">add-pin-columns.sql</code> in Supabase once — then they sync everywhere.
+            </div>
+          )}
+        </div>
+      )}
+
+      {mode === 'view' && (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {properties.map(p => (
+            <button key={p.id} onClick={()=>openBookFor(null, p.id)} className="flex items-center gap-1.5 text-xs text-ink-soft hover:text-ink">
+              <span className="w-2.5 h-2.5 rounded-full" style={{background:p.color}}/>{p.name}{occupiedNow(p.id) && <span className="text-emerald-600">· now</span>}
+            </button>
+          ))}
+          {placedCount < properties.length && (
+            <span className="text-xs text-ink-mute">· {placedCount}/{properties.length} pinned — tap “Place pins” to set the rest</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────  Transport (cars) view  ───────────────────────────── */
+
+function TransportView({ user, users, properties, bookings, requests, requestsErr, reload }) {
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const propOf = id => properties.find(p=>p.id===id)
+  const userOf = id => users.find(u=>u.id===id)
+
+  const tableMissing = requestsErr && /transport_requests|does not exist|schema cache|Could not find the table/i.test(requestsErr.message||'')
+
+  const setStatus = async (r, status) => {
+    const patch = { status }
+    if (status === 'arranged') patch.arranged_by = user.id
+    if (status === 'requested') patch.arranged_by = null
+    await sb.from('transport_requests').update(patch).eq('id', r.id)
+    await reload()
+  }
+  const del = async (r) => { await sb.from('transport_requests').delete().eq('id', r.id); await reload() }
+
+  if (tableMissing) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 sm:px-8 py-8 fade-in">
+        <div className="text-gold-500 tracking-[.3em] text-xs mb-2">TRANSPORT</div>
+        <h1 className="font-display text-4xl text-ink mb-4">Car requests</h1>
+        <Card className="p-6">
+          <div className="text-5xl mb-3">🚗</div>
+          <div className="font-display text-xl">One-time setup needed</div>
+          <p className="text-ink-soft text-sm mt-2">
+            The car-request inbox needs a quick database update. In Supabase → <b>SQL Editor</b> → <b>New query</b>,
+            paste <code className="bg-sand-100 px-1 rounded">al-saif/schema_v2.sql</code> and click <b>Run</b> — then refresh.
+            (This also enables shared map pins.)
+          </p>
+          <Btn className="mt-4" onClick={()=>location.reload()}>I've run it — reload</Btn>
+        </Card>
+      </div>
+    )
+  }
+
+  const groups = {
+    requested: requests.filter(r => r.status === 'requested'),
+    arranged:  requests.filter(r => r.status === 'arranged'),
+    closed:    requests.filter(r => r.status === 'done' || r.status === 'cancelled'),
+  }
+
+  const Section = ({ title, items, tone }) => items.length === 0 ? null : (
+    <section className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <h2 className="font-display text-2xl">{title}</h2>
+        <Chip tone={tone}>{items.length}</Chip>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-4">
+        {items.map(r => (
+          <TransportCard key={r.id} r={r} prop={propOf(r.property_id)} who={userOf(r.requested_by)} arranger={userOf(r.arranged_by)}
+            onArrange={()=>setStatus(r,'arranged')} onDone={()=>setStatus(r,'done')} onReopen={()=>setStatus(r,'requested')}
+            onCancel={()=>setStatus(r,'cancelled')} onEdit={()=>{setEditing(r); setFormOpen(true)}} onDelete={()=>del(r)} />
+        ))}
+      </div>
+    </section>
+  )
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-8 py-8 fade-in">
+      <div className="flex items-end justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <div className="text-gold-500 tracking-[.3em] text-xs mb-2">TRANSPORT</div>
+          <h1 className="font-display text-4xl text-ink">Car requests</h1>
+          <p className="text-ink-mute mt-1">
+            {groups.requested.length > 0
+              ? `${groups.requested.length} request${groups.requested.length>1?'s':''} waiting to be arranged.`
+              : 'Everything’s arranged. Raise a request and any of the family can sort the cars.'}
+          </p>
+        </div>
+        <Btn kind="gold" onClick={()=>{ setEditing(null); setFormOpen(true) }}>🚗 New car request</Btn>
+      </div>
+
+      {requests.length === 0 ? (
+        <Card className="p-10 text-center">
+          <div className="text-5xl mb-3">🚗</div>
+          <div className="font-display text-xl">No car requests yet</div>
+          <div className="text-ink-mute text-sm mt-1">When you’re bringing guests, raise a request so someone can book their cars.</div>
+          <Btn className="mt-4" kind="gold" onClick={()=>{ setEditing(null); setFormOpen(true) }}>Raise the first one</Btn>
+        </Card>
+      ) : (
+        <>
+          <Section title="Needs arranging" items={groups.requested} tone="gold" />
+          <Section title="Arranged" items={groups.arranged} tone="green" />
+          <Section title="Past & cancelled" items={groups.closed} tone="neutral" />
+        </>
+      )}
+
+      <Modal open={formOpen} onClose={()=>{setFormOpen(false); setEditing(null)}} title={editing ? 'Edit car request' : 'New car request'}>
+        <TransportForm user={user} properties={properties} bookings={bookings} users={users} editing={editing}
+          onClose={async (saved)=>{ setFormOpen(false); setEditing(null); if (saved) await reload() }} />
+      </Modal>
+    </div>
+  )
+}
+
+function TransportCard({ r, prop, who, arranger, onArrange, onDone, onReopen, onCancel, onEdit, onDelete }) {
+  const st = TRANSPORT_STATUS[r.status] || TRANSPORT_STATUS.requested
+  const ct = CAR_TYPES.find(c=>c.id===r.car_type)
+  const aud = audienceOf(r.for_whom)
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{ct?.icon || '🚗'}</span>
+          <div>
+            <div className="font-medium text-ink">{aud ? `${aud.icon} ${aud.label}` : 'Cars'}</div>
+            <div className="text-xs text-ink-mute">{r.cars} {carTypeLabel(r.car_type)}{r.cars>1?'s':''} · {r.passengers} passenger{r.passengers>1?'s':''}</div>
+          </div>
+        </div>
+        <Chip tone={st.tone}>{st.label}</Chip>
+      </div>
+
+      <div className="space-y-1.5 text-sm text-ink-soft mt-3">
+        <div className="flex gap-2"><span className="text-ink-mute w-16 flex-shrink-0">Pickup</span><span>{r.pickup_location || '—'}{r.pickup_at ? ` · ${fmtDateTime(r.pickup_at)}` : ''}</span></div>
+        <div className="flex gap-2"><span className="text-ink-mute w-16 flex-shrink-0">To</span><span>{prop ? prop.name : '—'}</span></div>
+        {r.notes && <div className="flex gap-2"><span className="text-ink-mute w-16 flex-shrink-0">Notes</span><span>{r.notes}</span></div>}
+        <div className="flex gap-2"><span className="text-ink-mute w-16 flex-shrink-0">Raised by</span><span>{who ? `${who.emoji} ${who.name}` : '—'}{arranger && r.status!=='requested' ? ` · arranged by ${arranger.emoji} ${arranger.name}` : ''}</span></div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mt-4">
+        {r.status === 'requested' && <>
+          <Btn kind="primary" className="px-4 py-2" onClick={onArrange}>✓ Mark arranged</Btn>
+          <Btn kind="soft" className="px-4 py-2" onClick={onEdit}>Edit</Btn>
+          <Btn kind="ghost" className="px-3 py-2 text-ink-mute" onClick={onCancel}>Cancel</Btn>
+        </>}
+        {r.status === 'arranged' && <>
+          <Btn kind="gold" className="px-4 py-2" onClick={onDone}>Mark done</Btn>
+          <Btn kind="ghost" className="px-3 py-2 text-ink-mute" onClick={onReopen}>Reopen</Btn>
+        </>}
+        {(r.status === 'done' || r.status === 'cancelled') && <>
+          <Btn kind="soft" className="px-4 py-2" onClick={onReopen}>Reopen</Btn>
+          <Btn kind="ghost" className="px-3 py-2 text-rose-600" onClick={onDelete}>Delete</Btn>
+        </>}
+      </div>
+    </Card>
+  )
+}
+
+function TransportForm({ user, properties, bookings, users, editing, onClose }) {
+  const userOf = id => users.find(u=>u.id===id)
+  const toLocalInput = iso => { if(!iso) return ''; const d=new Date(iso); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16) }
+  const isPreset = v => PICKUPS.includes(v)
+
+  const [bookingId, setBookingId]   = useState(editing?.booking_id || '')
+  const [propertyId, setPropertyId] = useState(editing?.property_id || '')
+  const [audience, setAudience]     = useState(audienceOf(editing?.for_whom)?.id || 'family')
+  const [passengers, setPassengers] = useState(editing?.passengers || 2)
+  const [cars, setCars]             = useState(editing?.cars || 1)
+  const [carType, setCarType]       = useState(editing?.car_type || 'sedan')
+  const [pickup, setPickup]         = useState(editing?.pickup_location || PICKUPS[0])
+  const [otherMode, setOtherMode]   = useState(editing?.pickup_location ? !isPreset(editing.pickup_location) : false)
+  const [pickupAt, setPickupAt]     = useState(toLocalInput(editing?.pickup_at))
+  const [notes, setNotes]           = useState(editing?.notes || '')
+  const [saving, setSaving]         = useState(false)
+  const [error, setError]           = useState(null)
+
+  const upcoming = [...bookings].filter(b => b.end_date >= fmt.iso(new Date())).sort((a,b)=>a.start_date.localeCompare(b.start_date))
+  const pickBooking = id => { setBookingId(id); const b = bookings.find(x=>x.id===id); if (b) setPropertyId(b.property_id) }
+  const labelBooking = b => {
+    const p = properties.find(x=>x.id===b.property_id); const u = userOf(b.booked_by)
+    return `${u?.name||'?'} · ${p?p.name.replace(/\s+—.*/, ''):'?'} · ${fmt.short(b.start_date)}–${fmt.short(b.end_date)}`
+  }
+
+  const save = async () => {
+    setSaving(true); setError(null)
+    const row = {
+      booking_id: bookingId || null, property_id: propertyId || null,
+      requested_by: user.id, for_whom: audience,
+      passengers: +passengers, cars: +cars, car_type: carType,
+      pickup_location: pickup || null,
+      pickup_at: pickupAt ? new Date(pickupAt).toISOString() : null,
+      notes: notes || null,
+    }
+    const res = editing
+      ? await sb.from('transport_requests').update(row).eq('id', editing.id)
+      : await sb.from('transport_requests').insert({ ...row, status:'requested' })
+    setSaving(false)
+    if (res.error) setError(res.error.message); else onClose(true)
+  }
+
+  return (
+    <div className="space-y-5">
+      <Field label="Who's this for?">
+        <OptionGroup options={AUDIENCES} value={audience} onChange={setAudience} cols={3} />
+        <div className="text-[12px] text-ink-mute mt-1.5">{audienceOf(audience)?.hint}</div>
+      </Field>
+
+      <Field label="Link to a stay" hint="optional">
+        <select value={bookingId} onChange={e=>pickBooking(e.target.value)} className={IPT}>
+          <option value="">Not linked to a stay</option>
+          {upcoming.map(b => <option key={b.id} value={b.id}>{labelBooking(b)}</option>)}
+        </select>
+      </Field>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Cars"><Stepper value={cars} set={setCars} max={20} /></Field>
+        <Field label="Passengers"><Stepper value={passengers} set={setPassengers} max={40} /></Field>
+      </div>
+
+      <Field label="Car type">
+        <OptionGroup options={CAR_TYPES} value={carType} onChange={setCarType} cols={2} />
+      </Field>
+
+      <Field label="Pick-up airport">
+        <div className="grid grid-cols-3 gap-2.5">
+          {PICKUPS.map(p => (
+            <button key={p} type="button" onClick={()=>{ setOtherMode(false); setPickup(p) }}
+              className={optClass(!otherMode && pickup===p)}>✈ {p}</button>
+          ))}
+          <button type="button" onClick={()=>{ setOtherMode(true); setPickup('') }}
+            className={optClass(otherMode)}>Other</button>
+        </div>
+        {otherMode && <input className={`${IPT} mt-2`} placeholder="Where from?" value={pickup} onChange={e=>setPickup(e.target.value)} />}
+      </Field>
+
+      <Field label="Pick-up date & time">
+        <input type="datetime-local" className={IPT} value={pickupAt} onChange={e=>setPickupAt(e.target.value)} />
+      </Field>
+
+      <Field label="Destination villa">
+        <select value={propertyId} onChange={e=>setPropertyId(e.target.value)} className={IPT}>
+          <option value="">Select a villa…</option>
+          {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </Field>
+
+      <Field label="Notes" hint="optional">
+        <textarea rows="2" className={IPT} placeholder="Flight number, timing, child seats…" value={notes} onChange={e=>setNotes(e.target.value)} />
+      </Field>
+
+      {error && <div className="text-rose-600 text-sm">{error}</div>}
+      <div className="flex justify-end gap-2 pt-1">
+        <Btn kind="ghost" onClick={()=>onClose(false)}>Cancel</Btn>
+        <Btn kind="gold" onClick={save} disabled={saving}>{saving?'Saving…':(editing?'Save changes':'Raise request')}</Btn>
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────────  Al Saif Wrapped  ───────────────────────────── */
+
+function WrappedView({ users, properties, bookings, setView }) {
+  const [year, setYear] = useState(new Date().getFullYear())
+  const years = useMemo(() => {
+    const s = new Set(bookings.map(b => parseLocal(b.start_date).getFullYear()))
+    s.add(new Date().getFullYear()); return [...s].sort((a,b)=>b-a)
+  }, [bookings])
+
+  const propOf = id => properties.find(p=>p.id===id)
+  const nightsOf = b => nights(b.start_date, b.end_date)
+  const valueOf  = b => (propOf(b.property_id)?.nightly_rate_sar||0) * nightsOf(b)
+  const inYear = bookings.filter(b => parseLocal(b.start_date).getFullYear() === year)
+
+  const totalNights = inYear.reduce((s,b)=>s+nightsOf(b),0)
+  const totalGuests = inYear.reduce((s,b)=>s+(b.guest_count||0),0)
+  const totalValue  = inYear.reduce((s,b)=>s+valueOf(b),0)
+
+  const propNights = {}
+  inYear.forEach(b => { propNights[b.property_id] = (propNights[b.property_id]||0) + nightsOf(b) })
+  const favPropId = Object.keys(propNights).sort((a,b)=>propNights[b]-propNights[a])[0]
+  const favProp = propOf(favPropId)
+
+  const monthN = Array(12).fill(0)
+  inYear.forEach(b => { monthN[parseLocal(b.start_date).getMonth()] += nightsOf(b) })
+  const busiestMonth = monthN.some(x=>x>0) ? new Date(2000, monthN.indexOf(Math.max(...monthN)),1).toLocaleString('en',{month:'long'}) : '—'
+
+  const perUser = users.map(u => {
+    const my = inYear.filter(b => b.booked_by === u.id)
+    const pn = {}; my.forEach(b => { pn[b.property_id]=(pn[b.property_id]||0)+nightsOf(b) })
+    const topId = Object.keys(pn).sort((a,b)=>pn[b]-pn[a])[0]
+    return { ...u, stays: my.length, nights: my.reduce((s,b)=>s+nightsOf(b),0),
+      guests: my.reduce((s,b)=>s+(b.guest_count||0),0), value: my.reduce((s,b)=>s+valueOf(b),0),
+      topProp: propOf(topId)?.name }
+  })
+  const leaderId = (key) => perUser.reduce((best,u)=> u[key] > (best? best[key] : -1) ? u : best, null)?.id
+  const titles = {}
+  const assign = (key, title) => { const id = leaderId(key); if (id && perUser.find(u=>u.id===id)[key] > 0 && !titles[id]) titles[id] = title }
+  assign('guests', 'The Host 🥂'); assign('nights', 'The Regular ☀️'); assign('stays', 'The Explorer 🧭'); assign('value', 'The Generous One 💛')
+
+  const empty = inYear.length === 0
+  const doPrint = () => window.print()
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 sm:px-8 py-8 fade-in">
+      <div className="flex items-center justify-between mb-6 no-print">
+        <button onClick={()=>setView('insights')} className="text-sm text-ink-mute hover:text-ink">← Back</button>
+        <div className="flex items-center gap-2">
+          <select value={year} onChange={e=>setYear(+e.target.value)} className="rounded-full bg-white shadow-soft px-4 py-2 text-sm">
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          {!empty && <Btn kind="gold" onClick={doPrint}>⬇ Save / share</Btn>}
+        </div>
+      </div>
+
+      <div id="wrapped-cards" className="space-y-5">
+        {/* Cover */}
+        <div className="wrap-card rounded-3xl p-8 text-center text-white relative overflow-hidden"
+             style={{ background:'linear-gradient(150deg,#0c4a6e,#062b3e 60%,#0b1f33)' }}>
+          <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full" style={{background:'rgba(201,166,76,.18)'}}/>
+          <div className="relative">
+            <div className="tracking-[.4em] text-gold-300 text-xs mb-3">A L · S A I F</div>
+            <div className="font-display text-6xl leading-none">{year}</div>
+            <div className="font-display text-3xl text-gold-300 mt-1">Wrapped</div>
+            <p className="text-sand-200/80 text-sm mt-4">Our year across the coast.</p>
+          </div>
+        </div>
+
+        {empty ? (
+          <div className="wrap-card rounded-3xl p-8 bg-white shadow-card text-center">
+            <div className="text-5xl mb-3">🌅</div>
+            <div className="font-display text-2xl">Your {year} is just beginning</div>
+            <p className="text-ink-mute text-sm mt-2">Book a few stays and your Wrapped fills with nights, guests, and the value you’ve shared.</p>
+          </div>
+        ) : (
+          <>
+            {/* Family totals */}
+            <div className="wrap-card rounded-3xl p-7 bg-white shadow-card">
+              <div className="text-gold-500 tracking-[.3em] text-xs mb-4">THE FAMILY · {year}</div>
+              <div className="grid grid-cols-2 gap-5">
+                <BigStat n={totalNights} label="nights on the coast" />
+                <BigStat n={totalGuests} label="guests hosted" />
+                <BigStat n={inYear.length} label={inYear.length===1?'stay booked':'stays booked'} />
+                <BigStat n={busiestMonth} label="busiest month" small />
+              </div>
+              <div className="mt-6 rounded-2xl p-5" style={{background: favProp ? `${favProp.color}10` : '#f7f2e8'}}>
+                <div className="text-xs text-ink-mute uppercase tracking-wider">Favourite villa</div>
+                <div className="font-display text-2xl text-ink">{favProp ? favProp.name : '—'}</div>
+              </div>
+              <div className="mt-3 rounded-2xl p-5 bg-gold-50">
+                <div className="text-xs text-gold-600 uppercase tracking-wider">Shadow value gifted</div>
+                <div className="font-display text-3xl text-gold-600">{fmt.sar(totalValue)}</div>
+                <div className="text-xs text-ink-mute mt-1">what these stays would’ve cost at hotel rates — given freely to family & guests.</div>
+              </div>
+            </div>
+
+            {/* Per-person cards */}
+            {perUser.filter(u=>u.stays>0).map(u => (
+              <div key={u.id} className="wrap-card rounded-3xl p-7 text-white relative overflow-hidden"
+                   style={{ background:`linear-gradient(150deg, ${u.color}, ${u.color}cc 70%, ${u.color}99)` }}>
+                <div className="absolute -bottom-10 -right-6 text-[140px] opacity-15 leading-none">{u.emoji}</div>
+                <div className="relative">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-2xl">{u.emoji}</span>
+                    <span className="font-display text-3xl">{u.name}’s {year}</span>
+                  </div>
+                  {titles[u.id] && <div className="inline-block bg-white/20 rounded-full px-3 py-1 text-sm mb-4">{titles[u.id]}</div>}
+                  <div className="grid grid-cols-3 gap-4 mt-3">
+                    <div><div className="font-display text-4xl">{u.nights}</div><div className="text-xs opacity-80">nights</div></div>
+                    <div><div className="font-display text-4xl">{u.stays}</div><div className="text-xs opacity-80">stays</div></div>
+                    <div><div className="font-display text-4xl">{u.guests}</div><div className="text-xs opacity-80">guests</div></div>
+                  </div>
+                  {u.topProp && <div className="mt-5 text-sm opacity-90">Favourite escape · <b>{u.topProp}</b></div>}
+                  <div className="mt-1 text-sm opacity-90">Gifted · <b>{fmt.sar(u.value)}</b> in stays</div>
+                </div>
+              </div>
+            ))}
+
+            {/* Closing */}
+            <div className="wrap-card rounded-3xl p-8 text-center bg-white shadow-card">
+              <div className="text-3xl mb-2">🌊</div>
+              <div className="font-display text-2xl text-ink">Here’s to more time together in {year+1}.</div>
+              <div className="divider-gold w-32 mx-auto mt-4"/>
+              <div className="text-gold-500 tracking-[.3em] text-xs mt-4">A L · S A I F</div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const BigStat = ({ n, label, small }) => (
+  <div>
+    <div className={`font-display text-ink ${small?'text-3xl':'text-5xl'} leading-none`}>{n}</div>
+    <div className="text-xs text-ink-mute mt-1">{label}</div>
+  </div>
+)
+
+/* ─────────────────────────────  Setup helper  ───────────────────────────── */
+
+function SetupHelp({ error }) {
+  const msg = error?.message || String(error)
+  const missingTable = /relation .* does not exist|Could not find the table|schema cache/i.test(msg)
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <Card className="max-w-xl w-full p-8 fade-in">
+        <div className="text-gold-500 tracking-[.3em] text-xs mb-2">SETUP NEEDED</div>
+        <h1 className="font-display text-3xl text-ink mb-4">
+          {missingTable ? 'Database not set up yet' : "Can't reach Supabase"}
+        </h1>
+        {missingTable ? (
+          <ol className="space-y-3 text-sm text-ink-soft list-decimal pl-5">
+            <li>Open your Supabase project <a href="https://supabase.com/dashboard" target="_blank" className="text-sea-500 underline">dashboard</a>.</li>
+            <li>Left sidebar → <b>SQL Editor</b> → <b>New query</b>.</li>
+            <li>Copy <code className="bg-sand-100 px-1 rounded">al-saif/schema.sql</code> into the editor and click <b>Run</b>.</li>
+            <li>Refresh this page.</li>
+          </ol>
+        ) : (
+          <div className="text-sm text-ink-soft space-y-2">
+            <p>Check that the Supabase URL and publishable key inside this HTML file match your project.</p>
+            <p>If the project is paused (free tier auto-pauses after a week of inactivity), open the dashboard and click <b>Restore</b>.</p>
+          </div>
+        )}
+        <details className="mt-5">
+          <summary className="text-xs text-ink-mute cursor-pointer">Show technical error</summary>
+          <pre className="mt-2 p-3 bg-sand-100 rounded-lg text-xs text-ink-soft overflow-x-auto whitespace-pre-wrap">{msg}</pre>
+        </details>
+        <Btn className="mt-6" kind="primary" onClick={()=>location.reload()}>I've set it up — reload</Btn>
+      </Card>
+    </div>
+  )
+}
+
+/* ─────────────────────────────  App shell  ───────────────────────────── */
+
+function App() {
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('al-saif-user') || 'null') } catch { return null }
+  })
+  const [view, setView] = useState('today')
+  const [bookOpen, setBookOpen] = useState(false)
+  const [prefill, setPrefill] = useState(null)
+
+  const { rows: users,      err: usersErr } = useTable('users', { order:'sort_order' })
+  const { rows: properties, err: propsErr, reload: reloadProps } = useTable('properties', { order:'sort_order' })
+  const { rows: bookings,   err: bookErr, reload: reloadBookings } = useTable('bookings', { order:'start_date' })
+  const { rows: requests,   err: reqErr,  reload: reloadTransport } = useTable('transport_requests', { order:'created_at', ascending:false })
+  const pendingTransport = (requests || []).filter(r => r.status === 'requested').length
+
+  const pickUser = u => { localStorage.setItem('al-saif-user', JSON.stringify(u)); setUser(u) }
+  const signOut  = () => { localStorage.removeItem('al-saif-user'); setUser(null) }
+
+  const openBook = useCallback((date=null, propertyId=null) => {
+    setPrefill({ date, propertyId })
+    setBookOpen(true)
+    setView('today')
+  }, [])
+
+  const firstErr = usersErr || propsErr || bookErr
+  if (firstErr) return <SetupHelp error={firstErr}/>
+
+  // initial: waiting on data
+  if (users === null || properties === null || bookings === null) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <div className="font-display text-3xl text-ink">Al Saif</div>
+        <div className="text-gold-500 tracking-[.3em] text-xs mt-2">CONNECTING</div>
+        <div className="mt-6"><Spinner/></div>
+      </div>
+    )
+  }
+
+  if (users.length === 0 || properties.length === 0) return <SetupHelp error={{message:'Tables are empty — seed data did not load.'}}/>
+
+  if (!user) return <AvatarPicker users={users} onPick={pickUser}/>
+
+  return (
+    <>
+      <TopBar user={user} view={view} setView={view => { setView(view); if (view==='book') openBook() }} onSignOut={signOut} pendingTransport={pendingTransport}/>
+      {view === 'today'      && <TodayView user={user} users={users} properties={properties} bookings={bookings} setView={setView} openBook={()=>openBook()} pendingTransport={pendingTransport}/>}
+      {view === 'map'        && <MapView properties={properties} bookings={bookings} openBookFor={openBook} setView={setView} onChanged={reloadProps}/>}
+      {view === 'calendar'   && <CalendarView properties={properties} users={users} bookings={bookings} openBookFor={d=>openBook(d)} onChanged={reloadBookings}/>}
+      {view === 'cars'       && <TransportView user={user} users={users} properties={properties} bookings={bookings} requests={requests||[]} requestsErr={reqErr} reload={reloadTransport}/>}
+      {view === 'insights'   && <InsightsView users={users} properties={properties} bookings={bookings} setView={setView}/>}
+      {view === 'wrapped'    && <WrappedView users={users} properties={properties} bookings={bookings} setView={setView}/>}
+      {view === 'properties' && <PropertiesView properties={properties} bookings={bookings} openBookFor={openBook} onUpdate={reloadProps}/>}
+
+      <Modal open={bookOpen} onClose={()=>setBookOpen(false)} title="New booking">
+        <BookForm
+          user={user}
+          properties={properties.filter(p => p.is_active !== false)}
+          bookings={bookings}
+          prefill={prefill}
+          onSaved={reloadBookings}
+          onClose={(saved) => { setBookOpen(false); setPrefill(null); if (saved) setView('today') }}
+        />
+      </Modal>
+
+      <footer className="max-w-6xl mx-auto px-8 py-10 text-center text-xs text-ink-mute">
+        <div className="divider-gold w-32 mx-auto mb-4"/>
+        Al Saif Concierge · Synced live · {users.length} family members · {properties.length} retreats
+      </footer>
+    </>
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>)
+</script>
+</body>
+</html>
