@@ -1,0 +1,8 @@
+{
+  "name": "alsaifredsea",
+  "private": true,
+  "description": "Al Saif Family Concierge — dependencies are only for the Netlify function in netlify/functions/",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0"
+  }
+}

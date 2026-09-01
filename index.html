@@ -1917,6 +1917,240 @@ const BigStat = ({ n, label, small }) => (
   </div>
 )
 
+/* ─────────────────────────────  AI Concierge chat  ───────────────────────────── */
+
+// The chat's brain lives in netlify/functions/chat.mjs (Claude + system prompt
+// + tool schemas). This side renders the conversation and EXECUTES Claude's
+// tool calls with the same Supabase client + conflict checks as the rest of
+// the app — so an AI booking obeys exactly the same no-overbook rules.
+
+const CHAT_MAX_TURNS = 6
+const CHAT_CHIPS = [
+  'Book the Four Seasons this weekend',
+  'Is any villa free in October?',
+  'Arrange 2 cars from the airport',
+  'How was our summer?',
+]
+
+function ChatWidget({ user, users, properties, bookings, requests, reloadBookings, reloadProps, reloadTransport }) {
+  const [open, setOpen] = useState(false)
+  const [msgs, setMsgs] = useState([])     // display: {role:'user'|'assistant'|'action'|'error'|'setup', text}
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const apiMessages = useRef([])           // full Anthropic-shaped history (incl. tool blocks)
+  const scrollRef = useRef(null)
+
+  // always-fresh data for snapshots & tool execution (avoids stale closures mid-loop)
+  const dataRef = useRef({})
+  dataRef.current = { user, users, properties, bookings, requests, reloadBookings, reloadProps, reloadTransport }
+
+  useEffect(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }, [msgs, busy, open])
+
+  const push = m => setMsgs(prev => [...prev, m])
+
+  const snapshot = () => {
+    const d = dataRef.current
+    return {
+      user: { id: d.user.id, name: d.user.name },
+      today: fmt.iso(new Date()),
+      now: new Date().toLocaleString('en-GB'),
+      snapshot: {
+        FAMILY: (d.users||[]).map(u => ({ id: u.id, name: u.name })),
+        PROPERTIES: (d.properties||[]).map(p => ({ id: p.id, name: p.name, location: p.location, bedrooms: p.bedrooms, nightly_rate_sar: p.nightly_rate_sar, is_owned: !!p.is_owned, active: p.is_active !== false })),
+        BOOKINGS: (d.bookings||[]).slice(-300).map(b => ({ property_id: b.property_id, start: b.start_date, end: b.end_date, by: b.booked_by, guests: b.guest_count, names: b.guest_names || '', purpose: b.purpose || '' })),
+        CAR_REQUESTS: (d.requests||[]).slice(0, 50).map(r => ({ status: r.status, passengers: r.passengers, cars: r.cars, type: r.car_type, pickup: r.pickup_location, at: r.pickup_at, by: r.requested_by })),
+      },
+    }
+  }
+
+  const execTool = async (name, input) => {
+    const d = dataRef.current
+    try {
+      if (name === 'create_booking') {
+        const p = (d.properties||[]).find(x => x.id === input.property_id)
+        if (!p) return { error: 'Unknown villa id — use an id from the PROPERTIES snapshot.' }
+        if (!(input.end_date > input.start_date)) return { error: 'Check-out must be after check-in.' }
+        const clash = (d.bookings||[]).filter(b => b.property_id === input.property_id && rangeOverlaps(b.start_date, b.end_date, input.start_date, input.end_date))
+        if (clash.length) {
+          const who = clash.map(c => { const w=(d.users||[]).find(u=>u.id===c.booked_by); return `${w?w.name:'someone'} ${c.start_date}→${c.end_date}` }).join(', ')
+          return { error: `Dates conflict with: ${who}. A stay may start on another's checkout day.` }
+        }
+        const { error } = await sb.from('bookings').insert({
+          property_id: input.property_id, booked_by: d.user.id,
+          start_date: input.start_date, end_date: input.end_date,
+          purpose: input.purpose || 'family',
+          guest_count: Math.max(1, Math.round(+input.guest_count) || 1),
+          guest_names: (input.guest_names||[]).map(s=>String(s).trim()).filter(Boolean).join(', ') || null,
+          notes: input.notes || null,
+        })
+        if (error) return { error: friendlyBookingError(error) }
+        try { await d.reloadBookings() } catch {}
+        celebrate()
+        return { ok: `Booked ${p.name} · ${fmt.short(input.start_date)} → ${fmt.short(input.end_date)} · ${input.guest_count} guest${input.guest_count>1?'s':''}` }
+      }
+      if (name === 'add_villa') {
+        const base = String(input.name||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'villa'
+        const { error } = await sb.from('properties').insert({
+          slug: `${base}-${Math.random().toString(36).slice(2,6)}`,
+          name: String(input.name).trim(),
+          hotel: String(input.hotel||'').trim() || String(input.name).trim(),
+          location: String(input.location||'').trim() || '—',
+          bedrooms: Math.max(1, Math.round(+input.bedrooms) || 1),
+          nightly_rate_sar: +input.nightly_rate_sar || 0,
+          color: VILLA_COLORS[(d.properties||[]).length % VILLA_COLORS.length],
+          description: String(input.description||'').trim() || null,
+          is_owned: !!input.is_owned, is_active: true,
+          sort_order: Math.max(0, ...(d.properties||[]).map(p=>p.sort_order||0)) + 1,
+        })
+        if (error) return { error: error.message }
+        try { await d.reloadProps() } catch {}
+        return { ok: `Added ${String(input.name).trim()} to the portfolio` }
+      }
+      if (name === 'request_car') {
+        const { error } = await sb.from('transport_requests').insert({
+          requested_by: d.user.id, for_whom: input.for_whom || 'family',
+          passengers: Math.max(1, Math.round(+input.passengers) || 1),
+          cars: Math.max(1, Math.round(+input.cars) || 1),
+          car_type: input.car_type === 'van' ? 'van' : 'sedan',
+          pickup_location: input.pickup_location || null,
+          pickup_at: input.pickup_at ? new Date(input.pickup_at).toISOString() : null,
+          property_id: input.property_id || null,
+          notes: input.notes || null, status: 'requested',
+        })
+        if (error) return { error: error.message }
+        try { await d.reloadTransport() } catch {}
+        return { ok: `Car request raised · ${input.cars} ${carTypeLabel(input.car_type).toLowerCase()}${input.cars>1?'s':''} · ${input.passengers} passenger${input.passengers>1?'s':''}` }
+      }
+      return { error: `Unknown tool: ${name}` }
+    } catch (e) { return { error: String(e?.message || e) } }
+  }
+
+  // keep history bounded; a trimmed history must still start with a plain user message
+  const trimHistory = () => {
+    let m = apiMessages.current
+    if (m.length <= 40) return
+    m = m.slice(-30)
+    while (m.length && !(m[0].role === 'user' && typeof m[0].content === 'string')) m.shift()
+    apiMessages.current = m
+  }
+
+  const send = async (text) => {
+    text = String(text||'').trim()
+    if (!text || busy) return
+    setInput('')
+    trimHistory()
+    push({ role: 'user', text })
+    apiMessages.current.push({ role: 'user', content: text })
+    setBusy(true)
+    try {
+      for (let turn = 0; turn < CHAT_MAX_TURNS; turn++) {
+        const r = await fetch('/api/chat', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ messages: apiMessages.current, data: snapshot() }),
+        })
+        let j = null
+        try { j = await r.json() } catch {}
+        if (!r.ok || !j || j.error) {
+          if (j && (j.error === 'missing_key' || j.error === 'bad_key')) push({ role: 'setup' })
+          else if (j && j.error === 'rate_limited') push({ role: 'error', text: 'The concierge is catching its breath — try again in a minute.' })
+          else push({ role: 'error', text: (j && (j.detail || j.error)) || `The concierge is unreachable (${r.status}).` })
+          break
+        }
+        const content = j.content || []
+        content.filter(b => b.type === 'text' && b.text && b.text.trim())
+               .forEach(b => push({ role: 'assistant', text: b.text.trim() }))
+        if (j.stop_reason === 'refusal') { push({ role: 'error', text: 'The concierge declined that request.' }); break }
+        apiMessages.current.push({ role: 'assistant', content })
+        if (j.stop_reason === 'pause_turn') continue
+        const toolUses = content.filter(b => b.type === 'tool_use')
+        if (j.stop_reason !== 'tool_use' || toolUses.length === 0) break
+        const results = []
+        for (const t of toolUses) {
+          const res = await execTool(t.name, t.input || {})
+          if (res.ok) push({ role: 'action', text: res.ok })
+          results.push({ type: 'tool_result', tool_use_id: t.id, content: res.ok || res.error || 'done', is_error: !!res.error })
+        }
+        apiMessages.current.push({ role: 'user', content: results })
+      }
+    } catch (e) {
+      push({ role: 'error', text: 'Network hiccup — try again.' })
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <>
+      {!open && (
+        <button onClick={()=>setOpen(true)} title="Concierge"
+          className="btn fixed z-50 bottom-24 right-4 md:bottom-6 md:right-6 w-14 h-14 rounded-full bg-gradient-to-br from-sea-500 to-sea-700 text-white text-2xl shadow-card flex items-center justify-center">✨</button>
+      )}
+      {open && (
+        <div className="fixed z-50 inset-x-0 bottom-0 md:inset-x-auto md:bottom-6 md:right-6 md:w-[400px] fade-in">
+          <div className="bg-sand-50 md:rounded-3xl rounded-t-3xl shadow-card border border-sand-200 flex flex-col overflow-hidden sheet-up"
+               style={{height:'min(78vh, 640px)'}}>
+            <div className="px-4 py-3 flex items-center justify-between border-b border-sand-200 bg-white/70">
+              <div className="flex items-center gap-2.5">
+                <span className="w-9 h-9 rounded-full bg-gradient-to-br from-sea-500 to-sea-700 text-white flex items-center justify-center text-lg">✨</span>
+                <div>
+                  <div className="font-display text-xl leading-none">Concierge</div>
+                  <div className="text-[11px] text-ink-mute">Books stays, arranges cars, knows the numbers</div>
+                </div>
+              </div>
+              <button onClick={()=>setOpen(false)} className="btn w-8 h-8 rounded-full bg-sand-100 hover:bg-sand-200 flex items-center justify-center text-ink-mute">✕</button>
+            </div>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+              {msgs.length === 0 && (
+                <div className="text-center pt-6">
+                  <div className="text-4xl mb-2">🌊</div>
+                  <div className="font-display text-xl text-ink">At your service, {user.name}.</div>
+                  <div className="text-xs text-ink-mute mt-1 mb-4">Try one of these — or just ask.</div>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {CHAT_CHIPS.map(c => (
+                      <button key={c} onClick={()=>send(c)}
+                        className="btn text-xs bg-white border border-sand-200 rounded-full px-3 py-1.5 text-ink-soft hover:border-sea-500/50">{c}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {msgs.map((m,i) => m.role === 'setup' ? (
+                <div key={i} className="bg-gold-50 border border-gold-300/40 rounded-2xl p-4 text-sm text-ink-soft">
+                  <div className="font-medium text-ink mb-1">🔑 One-time setup needed</div>
+                  The concierge needs an Anthropic API key:
+                  <ol className="list-decimal pl-4 mt-1 space-y-0.5 text-xs">
+                    <li>Create a key at <b>console.anthropic.com</b> → API keys</li>
+                    <li>Netlify → Site configuration → <b>Environment variables</b> → add <code className="bg-white px-1 rounded">ANTHROPIC_API_KEY</code></li>
+                    <li>Deploys → <b>Trigger deploy</b>, then ask again</li>
+                  </ol>
+                </div>
+              ) : m.role === 'action' ? (
+                <div key={i} className="flex justify-center"><span className="text-[11px] bg-emerald-50 text-emerald-700 rounded-full px-3 py-1">✓ {m.text}</span></div>
+              ) : m.role === 'error' ? (
+                <div key={i} className="flex justify-center"><span className="text-[11px] bg-rose-50 text-rose-700 rounded-full px-3 py-1 text-center">{m.text}</span></div>
+              ) : (
+                <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'}`}>
+                  <div dir="auto" className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${m.role==='user'?'bg-sea-500 text-white rounded-br-md':'bg-white shadow-soft text-ink rounded-bl-md'}`}>{m.text}</div>
+                </div>
+              ))}
+              {busy && (
+                <div className="flex justify-start"><div className="bg-white shadow-soft rounded-2xl rounded-bl-md px-4 py-3 flex gap-1.5">
+                  {[0,1,2].map(i => <span key={i} className="w-2 h-2 rounded-full bg-sand-300 animate-bounce" style={{animationDelay:`${i*0.15}s`}}/>)}
+                </div></div>
+              )}
+            </div>
+            <div className="p-3 border-t border-sand-200 bg-white/70 flex items-center gap-2"
+                 style={{paddingBottom:'calc(env(safe-area-inset-bottom) + 12px)'}}>
+              <input dir="auto" value={input} onChange={e=>setInput(e.target.value)}
+                onKeyDown={e=>{ if (e.key==='Enter') send(input) }} placeholder="Ask the concierge…"
+                className="flex-1 rounded-full border border-sand-200 bg-white px-4 py-2.5 text-[16px] focus:outline-none focus:ring-2 focus:ring-sea-500/30"/>
+              <button onClick={()=>send(input)} disabled={busy || !input.trim()}
+                className="btn w-11 h-11 rounded-full bg-sea-500 text-white flex items-center justify-center disabled:opacity-40 flex-shrink-0">↑</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 /* ─────────────────────────────  Setup helper  ───────────────────────────── */
 
 function SetupHelp({ error }) {
@@ -2021,6 +2255,9 @@ function App() {
       </main>
 
       <BottomBar view={view} setView={setView} openBook={()=>openBook()} pendingTransport={pendingTransport}/>
+
+      <ChatWidget user={user} users={users} properties={properties} bookings={bookings} requests={requests||[]}
+        reloadBookings={reloadBookings} reloadProps={reloadProps} reloadTransport={reloadTransport}/>
 
       <Modal open={bookOpen} onClose={()=>{ setBookOpen(false); setPrefill(null); setEditBooking(null) }} title={editBooking ? 'Edit booking' : 'New booking'}>
         <BookForm
